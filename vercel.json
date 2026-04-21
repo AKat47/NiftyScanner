@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/kite/:path*", "destination": "/api/proxy.js" }
+  ]
+}
