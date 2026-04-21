@@ -5,28 +5,25 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const accessToken = req.headers['x-access-token'];
-  const authType    = req.headers['x-auth-type'] || 'enctoken';
-  const apiKey      = process.env.KITE_API_KEY || req.headers['x-api-key'];
+  const apiKey      = process.env.KITE_API_KEY;
 
   if (!accessToken) {
-    return res.status(401).json({ error: 'Missing access token.' });
+    return res.status(401).json({ error: 'Not authenticated. Visit /api/login' });
   }
 
-  // enctoken works with kite.zerodha.com/oms (internal API)
-  // api_key:token works with api.kite.trade (Connect API)
-  const baseUrl    = authType === 'enctoken'
-    ? 'https://kite.zerodha.com/oms'
-    : 'https://api.kite.trade';
-
-  const authHeader = authType === 'enctoken'
-    ? `enctoken ${accessToken}`
-    : `token ${apiKey}:${accessToken}`;
-
-  // Strip /api/kite prefix to get actual Kite path
+  // Strip /api/kite prefix → get actual Kite path + query
   const withoutBase = req.url.replace(/^\/api\/kite/, '');
   const [pathOnly, ...qParts] = withoutBase.split('?');
-  const queryString = qParts.length ? '?' + qParts.join('?') : '';
-  const kiteUrl = `${baseUrl}${pathOnly}${queryString}`;
+  const rawQuery    = qParts.join('?');
+
+  // Rebuild repeated i= params correctly (Vercel may collapse them)
+  const urlParams   = new URLSearchParams(rawQuery);
+  const instruments = urlParams.getAll('i');
+  const finalQuery  = instruments.length
+    ? instruments.map(v => 'i=' + encodeURIComponent(v)).join('&')
+    : rawQuery;
+
+  const kiteUrl = `https://api.kite.trade${pathOnly}${finalQuery ? '?' + finalQuery : ''}`;
 
   console.log('[proxy]', req.method, kiteUrl);
 
@@ -35,7 +32,7 @@ export default async function handler(req, res) {
       method: req.method,
       headers: {
         'X-Kite-Version': '3',
-        'Authorization':  authHeader,
+        'Authorization':  `token ${apiKey}:${accessToken}`,
         'Accept':         'application/json',
       },
     };
@@ -47,10 +44,10 @@ export default async function handler(req, res) {
 
     const response = await fetch(kiteUrl, opts);
     const text     = await response.text();
+    console.log('[proxy]', response.status, text.substring(0, 200));
+
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
-
-    console.log('[proxy] status', response.status);
     res.status(response.status).json(data);
   } catch (err) {
     console.error('[proxy] error:', err.message);
