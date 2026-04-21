@@ -12,17 +12,23 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Missing access token.' });
   }
 
-  const authHeader = authType === 'token'
-    ? `token ${apiKey}:${accessToken}`
-    : `enctoken ${accessToken}`;
+  // enctoken works with kite.zerodha.com/oms (internal API)
+  // api_key:token works with api.kite.trade (Connect API)
+  const baseUrl    = authType === 'enctoken'
+    ? 'https://kite.zerodha.com/oms'
+    : 'https://api.kite.trade';
 
-  const fullUrl     = req.url;
-  const withoutBase = fullUrl.replace(/^\/api\/kite/, '');
+  const authHeader = authType === 'enctoken'
+    ? `enctoken ${accessToken}`
+    : `token ${apiKey}:${accessToken}`;
+
+  // Strip /api/kite prefix to get actual Kite path
+  const withoutBase = req.url.replace(/^\/api\/kite/, '');
   const [pathOnly, ...qParts] = withoutBase.split('?');
   const queryString = qParts.length ? '?' + qParts.join('?') : '';
-  const kiteUrl     = `https://api.kite.trade${pathOnly}${queryString}`;
+  const kiteUrl = `${baseUrl}${pathOnly}${queryString}`;
 
-  console.log('[proxy]', req.method, kiteUrl, 'auth='+authType);
+  console.log('[proxy]', req.method, kiteUrl);
 
   try {
     const opts = {
@@ -43,8 +49,11 @@ export default async function handler(req, res) {
     const text     = await response.text();
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    console.log('[proxy] status', response.status);
     res.status(response.status).json(data);
   } catch (err) {
+    console.error('[proxy] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 }
