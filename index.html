@@ -152,6 +152,17 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .param-k{color:var(--txt2);font-family:'DM Mono',monospace;flex-shrink:0;}
 .param-v{color:var(--txt);text-align:right;}
 
+/* Strategy toggles */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:0.5px solid var(--border);gap:12px;}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-info{flex:1;min-width:0;}
+.toggle-label{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:2px;}
+.toggle-desc{font-size:11px;color:var(--txt2);font-family:'DM Mono',monospace;}
+.toggle{width:44px;height:24px;border-radius:12px;background:var(--bg4);border:0.5px solid var(--border2);cursor:pointer;position:relative;flex-shrink:0;transition:background .2s,border-color .2s;}
+.toggle.on{background:var(--accent);border-color:var(--accent);}
+.toggle-knob{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+.toggle.on .toggle-knob{transform:translateX(20px);}
+
 /* Spinner / empty */
 .spinner-wrap{display:flex;flex-direction:column;align-items:center;padding:60px 20px;gap:14px;}
 .spinner{width:24px;height:24px;border:2px solid var(--bg4);border-top-color:var(--accent);border-radius:50%;animation:spin .65s linear infinite;}
@@ -200,7 +211,15 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 var S = {
   tab:'scanner', activeSector:'IT', detail:null,
   scanning:false, connected:false, demo:false,
-  accessToken:'', results:{}, modal:false
+  accessToken:'', results:{}, modal:false,
+  // Strategy condition toggles — user can turn each on/off
+  strategy: {
+    trendConfirmed: true,
+    priceAlignment: true,
+    volCondition:   true,
+    rsiCondition:   true,
+    nearHigh:       true
+  }
 };
 
 var SECTORS = {
@@ -284,9 +303,13 @@ function evalStrategy(candles, symbol, sector) {
   var volCondition=vol>avgVol*1.5;
   var rsiCondition=rsiVal>55;
   var nearHigh=close>high52*0.90;
-  var buySignal=trendConfirmed&&priceAlignment&&volCondition&&rsiCondition&&nearHigh;
+  // Only check conditions that are enabled by user
+  var activeKeys=['trendConfirmed','priceAlignment','volCondition','rsiCondition','nearHigh'];
+  var vals={trendConfirmed:trendConfirmed,priceAlignment:priceAlignment,volCondition:volCondition,rsiCondition:rsiCondition,nearHigh:nearHigh};
+  var buySignal=activeKeys.every(function(k){ return !S.strategy[k] || vals[k]; });
   var sellSignal=close<s50;
-  var passCount=[trendConfirmed,priceAlignment,volCondition,rsiCondition,nearHigh].filter(Boolean).length;
+  var passCount=activeKeys.filter(function(k){ return S.strategy[k] && vals[k]; }).length;
+  var totalActive=activeKeys.filter(function(k){ return S.strategy[k]; }).length;
   return {
     symbol:symbol, sector:sector,
     close:close, chg:prev?((close-prev)/prev*100):0,
@@ -294,7 +317,7 @@ function evalStrategy(candles, symbol, sector) {
     trendConfirmed:trendConfirmed, priceAlignment:priceAlignment,
     volCondition:volCondition, rsiCondition:rsiCondition, nearHigh:nearHigh,
     signal:buySignal?'buy':sellSignal?'sell':'watch',
-    passCount:passCount,
+    passCount:passCount, totalActive:totalActive,
     stopLoss:(close*0.92).toFixed(2),
     hi52pct:((close/high52)*100).toFixed(1),
     volRatio:(vol/avgVol).toFixed(1)
@@ -554,7 +577,7 @@ function renderDetail(){
     +'<div class="d-sector-lbl">'+secLabel+' · NSE</div>'
     +'<div class="d-price">₹'+fmt(s.close)+'</div>'
     +'<div class="d-chg '+(s.chg>=0?'pos':'neg')+'">'+fmtPct(s.chg)+' today</div>'
-    +'<div class="verdict '+s.signal+'">'+vTxt+' — '+s.passCount+'/5</div>'
+    +'<div class="verdict '+s.signal+'">'+vTxt+' — '+s.passCount+'/'+(s.totalActive||5)+'</div>'
     +'</div>'
     +'<div class="cond-box"><div class="cond-box-title">Strategy conditions</div>'+condRows+'</div>'
     +note+'<div style="height:20px"></div>';
@@ -563,46 +586,88 @@ function renderDetail(){
 // ── Render: Setup ──
 function renderSetup(){
   var connected=S.connected;
+  var st=S.strategy;
+  var activeCount=[st.trendConfirmed,st.priceAlignment,st.volCondition,st.rsiCondition,st.nearHigh].filter(Boolean).length;
+
+  var conditions=[
+    {key:'trendConfirmed', label:'Trend',    desc:'SMA50 > SMA200'},
+    {key:'priceAlignment', label:'Price',    desc:'Close > SMA50 & SMA200'},
+    {key:'volCondition',   label:'Volume',   desc:'> 1.5× 10-day avg'},
+    {key:'rsiCondition',   label:'RSI(14)',  desc:'> 55'},
+    {key:'nearHigh',       label:'52W High', desc:'Within 10% of high'},
+  ];
+
+  var toggleRows=conditions.map(function(c){
+    var on=st[c.key];
+    return '<div class="toggle-row">'
+      +'<div class="toggle-info">'
+      +'<div class="toggle-label">'+(on?c.label:'<s style="opacity:.4">'+c.label+'</s>')+'</div>'
+      +'<div class="toggle-desc" style="opacity:'+(on?'1':'.35')+'">'+c.desc+'</div>'
+      +'</div>'
+      +'<div class="toggle '+(on?'on':'')+'" onclick="toggleCond(\''+c.key+'\')">'
+      +'<div class="toggle-knob"></div>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+
   return '<div class="setup-wrap">'
+
+    // ── Connection card ──
     +'<div class="setup-card">'
     +'<h3>Kite Connect</h3>'
     +(connected
       ?'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:14px;">'
         +'<div style="width:10px;height:10px;border-radius:50%;background:var(--green);flex-shrink:0"></div>'
         +'<span style="font-size:13px;color:var(--green)">Connected — token valid today</span></div>'
-      :'<div style="font-size:13px;color:var(--txt3);margin-bottom:14px;line-height:1.6;">Click Login to authenticate with your Zerodha account. You will be redirected to Kite and back automatically.</div>')
+      :'<div style="font-size:13px;color:var(--txt3);margin-bottom:14px;line-height:1.6;">Login with Zerodha to scan live data. Token saves automatically.</div>')
     +'<a class="full-btn primary" href="/api/login">'+(connected?'Re-login (refresh token)':'Login with Kite →')+'</a>'
     +'<button class="full-btn" onclick="enableDemo()">Try demo data</button>'
     +(connected?'<button class="full-btn danger" onclick="logout()">Disconnect</button>':'')
     +'</div>'
 
+    // ── Strategy toggles ──
+    +'<div class="setup-card">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+    +'<h3 style="margin:0">Strategy conditions</h3>'
+    +'<span style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace;">'+activeCount+'/5 active</span>'
+    +'</div>'
+    +toggleRows
+    +'<div style="margin-top:14px;padding:10px 12px;background:var(--bg3);border-radius:var(--r);font-size:11px;color:var(--txt3);line-height:1.6;">'
+    +'Buy signal = all <strong style="color:var(--txt2)">active</strong> conditions pass. '
+    +'Disabled conditions are ignored in scoring.'
+    +'</div>'
+    +'</div>'
+
+    // ── How it works ──
     +'<div class="setup-card">'
     +'<h3>How it works</h3>'
     +[
       ['1','Click Login with Kite above'],
       ['2','Sign in with your Zerodha credentials'],
-      ['3','You are redirected back automatically'],
+      ['3','Redirected back automatically'],
       ['4','Token saved — scanner is ready'],
-      ['5','Repeat each morning (token expires 6 AM IST)']
+      ['5','Repeat each morning (expires 6 AM IST)']
     ].map(function(s){
       return '<div class="how-step"><span class="how-num">'+s[0]+'</span><span class="how-txt">'+s[1]+'</span></div>';
     }).join('')
-    +'</div>'
-
-    +'<div class="setup-card">'
-    +'<h3>Strategy rules</h3>'
-    +[
-      ['Trend',    'SMA50 > SMA200'],
-      ['Price',    'Close > SMA50 & SMA200'],
-      ['Volume',   '> 1.5× 10-day avg'],
-      ['RSI(14)',  '> 55'],
-      ['52W High', 'Within 10% of high'],
-      ['Buy',      'All 5 conditions pass'],
-      ['Stop loss','−8% or close < SMA50']
-    ].map(function(r){
-      return '<div class="param-row"><span class="param-k">'+r[0]+'</span><span class="param-v">'+r[1]+'</span></div>';
-    }).join('')
     +'</div></div>';
+}
+
+function toggleCond(key){
+  S.strategy[key] = !S.strategy[key];
+  // Re-evaluate signals with new conditions if results exist
+  Object.keys(S.results).forEach(function(sym){
+    var r=S.results[sym];
+    if(r.liveOnly) return; // can't re-eval live-only without candles
+    var keys=['trendConfirmed','priceAlignment','volCondition','rsiCondition','nearHigh'];
+    var buySignal=keys.every(function(k){ return !S.strategy[k]||r[k]; });
+    var passCount=keys.filter(function(k){ return S.strategy[k]&&r[k]; }).length;
+    var totalActive=keys.filter(function(k){ return S.strategy[k]; }).length;
+    r.signal=buySignal?'buy':r.close<r.sma50?'sell':'watch';
+    r.passCount=passCount;
+    r.totalActive=totalActive;
+  });
+  render();
 }
 
 // ── Main render ──
