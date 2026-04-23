@@ -1,7 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/kite/:path*", "destination": "/api/proxy.js" },
-    { "source": "/api/login",       "destination": "/api/login.js" },
-    { "source": "/api/callback",    "destination": "/api/callback.js" }
+    { "source": "/api/auth",         "destination": "/api/auth.js" },
+    { "source": "/api/kite/:path*",  "destination": "/api/proxy.js" }
   ]
 }

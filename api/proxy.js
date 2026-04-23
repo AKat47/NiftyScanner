@@ -1,22 +1,24 @@
+// api/proxy.js — forwards all /api/kite/* to api.kite.trade
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Api-Key, X-Access-Token, X-Auth-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Access-Token');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const accessToken = req.headers['x-access-token'];
   const apiKey      = process.env.KITE_API_KEY;
 
   if (!accessToken) {
-    return res.status(401).json({ error: 'Not authenticated. Visit /api/login' });
+    return res.status(401).json({ error: 'Missing access token. Call /api/auth first.' });
   }
 
-  // Strip /api/kite prefix → get actual Kite path + query
+  // Strip /api/kite prefix
   const withoutBase = req.url.replace(/^\/api\/kite/, '');
   const [pathOnly, ...qParts] = withoutBase.split('?');
   const rawQuery    = qParts.join('?');
 
-  // Rebuild repeated i= params correctly (Vercel may collapse them)
+  // Rebuild repeated i= params (Vercel collapses them)
   const urlParams   = new URLSearchParams(rawQuery);
   const instruments = urlParams.getAll('i');
   const finalQuery  = instruments.length
@@ -24,7 +26,6 @@ export default async function handler(req, res) {
     : rawQuery;
 
   const kiteUrl = `https://api.kite.trade${pathOnly}${finalQuery ? '?' + finalQuery : ''}`;
-
   console.log('[proxy]', req.method, kiteUrl);
 
   try {
@@ -44,10 +45,10 @@ export default async function handler(req, res) {
 
     const response = await fetch(kiteUrl, opts);
     const text     = await response.text();
-    console.log('[proxy]', response.status, text.substring(0, 200));
-
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    console.log('[proxy]', response.status, pathOnly);
     res.status(response.status).json(data);
   } catch (err) {
     console.error('[proxy] error:', err.message);
