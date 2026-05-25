@@ -30,6 +30,14 @@ async function getDb() {
 }
 
 // ── IST date helper ────────────────────────────────────────────────────────
+function istCacheKey() {
+  // Hourly cache key — format: YYYY-MM-DD-HH (IST)
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const date = ist.toISOString().split('T')[0];
+  const hour = ist.getUTCHours().toString().padStart(2, '0');
+  return date + '-' + hour;
+}
+
 function istDateString() {
   const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
   return ist.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -169,13 +177,13 @@ module.exports = async (req, res) => {
   if (!symbol) return res.status(400).json({ error: 'symbol required' });
 
   const today    = istDateString();
-  const cacheKey = symbol + '_' + today;
+  const cacheKey = symbol + '_' + istCacheKey(); // hourly key
 
   try {
     const db  = await getDb();
     const col = db.collection('candles');
 
-    // ── Cache hit ──────────────────────────────────────────────────────────
+    // ── Cache hit (hourly) ─────────────────────────────────────────────────
     if (force !== '1') {
       const cached = await col.findOne({ _id: cacheKey });
       if (cached?.candles?.length) {
@@ -198,7 +206,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── Store / overwrite in MongoDB ───────────────────────────────────────
+    // ── Store in MongoDB (hourly key) ──────────────────────────────────────
     await col.updateOne(
       { _id: cacheKey },
       { $set: { symbol, date: today, candles, source, cachedAt: new Date() } },

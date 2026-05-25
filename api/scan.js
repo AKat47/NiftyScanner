@@ -33,6 +33,15 @@ async function getDb() {
   return _mongoClient.db('niftyscanner');
 }
 
+function istCacheKey() {
+  // Hourly cache — Angel data refreshes at the top of each hour during market hours.
+  // Format: YYYY-MM-DD-HH (IST)
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  const date = ist.toISOString().split('T')[0];
+  const hour = ist.getUTCHours().toString().padStart(2, '0');
+  return date + '-' + hour;
+}
+
 function istDateString() {
   const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
   return ist.toISOString().split('T')[0];
@@ -149,9 +158,9 @@ async function fetchAndCache(col, symbol, from, to, today) {
       throw new Error('All sources failed for ' + symbol + ': ' + e.message);
     }
   }
-  const cacheKey = symbol + '_' + today;
-  await col.updateOne({ _id: cacheKey },
-    { $set: { symbol, date: today, candles, source, cachedAt: new Date() } },
+  const hourKey = symbol + '_' + istCacheKey();
+  await col.updateOne({ _id: hourKey },
+    { $set: { symbol, cacheKey: hourKey, candles, source, cachedAt: new Date() } },
     { upsert: true });
   return { candles, source };
 }
@@ -181,14 +190,15 @@ module.exports = async (req, res) => {
 
   const symbols = symsParam.split(',').map(s => s.trim()).filter(Boolean);
   const today   = istDateString();
+  const hourKey = istCacheKey();
   const forceRefresh = force === '1';
 
   try {
     const db  = await getDb();
     const col = db.collection('candles');
 
-    // ── Batch cache lookup ─────────────────────────────────────────────────
-    const cacheKeys  = symbols.map(s => s + '_' + today);
+    // ── Batch cache lookup (hourly key) ───────────────────────────────────
+    const cacheKeys  = symbols.map(s => s + '_' + hourKey);
     const cachedDocs = forceRefresh ? [] : await col.find({ _id: { $in: cacheKeys } }).toArray();
     const cachedMap  = {};
     cachedDocs.forEach(doc => { cachedMap[doc.symbol] = doc; });
@@ -201,7 +211,7 @@ module.exports = async (req, res) => {
     const fetchResults = {};
     if (misses.length) {
       const fns = misses.map(sym => () =>
-        fetchAndCache(col, sym, from, to, today)
+        fetchAndCache(col, sym, from, to, hourKey)
           .then(r  => { fetchResults[sym] = r; })
           .catch(e => { fetchResults[sym] = { error: e.message }; })
       );
