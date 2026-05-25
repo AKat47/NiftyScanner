@@ -490,13 +490,31 @@ function scanSymbol(sym, sector, force) {
     .catch(function(e){ console.warn('scanSymbol failed for', sym, e.message); });
 }
 
+// Batch fetch for a list of symbols — single round-trip to /api/scan.
+// Cache hits are resolved in parallel on the server; results come back all at once.
+function batchScan(syms, sectorMap, force) {
+  var range = getDateRange();
+  var url = '/api/scan?symbols=' + encodeURIComponent(syms.join(','))
+    + '&from=' + range.from + '&to=' + range.to
+    + (force ? '&force=1' : '');
+  return fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.ok) throw new Error(data.error || 'scan error');
+      Object.keys(data.results).forEach(function(sym){
+        var r   = data.results[sym];
+        var sec = sectorMap[sym] || S.activeSector;
+        if (r && r.candles && r.candles.length)
+          S.results[sym] = applyStrategy(r.candles, sym, sec, r.source);
+      });
+    });
+}
+
 function liveScanSector(sec, force) {
   var syms = userSyms[sec];
-  return syms.reduce(function(chain, sym){
-    return chain.then(function(){
-      return scanSymbol(sym, sec, force).catch(function(){});
-    });
-  }, Promise.resolve());
+  var sectorMap = {};
+  syms.forEach(function(s){ sectorMap[s] = sec; });
+  return batchScan(syms, sectorMap, force);
 }
 
 function autoScanSector(sec) {
@@ -514,12 +532,16 @@ function triggerScan(sec, force) {
 
 function scanAll(force) {
   S.scanning=true; render();
-  var secs=Object.keys(SECTORS).filter(function(k){return k!=='ALL';});
-  var chain=Promise.resolve();
-  secs.forEach(function(sec){
-    chain=chain.then(function(){ return liveScanSector(sec, force).catch(function(){}); });
+  // Build a deduplicated symbol list with sector mapping
+  var sectorMap = {};
+  Object.keys(SECTORS).forEach(function(sec){
+    if (sec === 'ALL') return;
+    userSyms[sec].forEach(function(sym){ sectorMap[sym] = sec; });
   });
-  chain.then(function(){ S.scanning=false; render(); });
+  var allSyms = Object.keys(sectorMap);
+  batchScan(allSyms, sectorMap, force)
+    .catch(function(e){ showToast('Scan error: '+e.message); })
+    .then(function(){ S.scanning=false; render(); });
 }
 
 // ── Helpers ────────────────────────────────────────────

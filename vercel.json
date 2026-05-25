@@ -3,6 +3,7 @@
     { "source": "/api/kite/:path*", "destination": "/api/proxy.js" },
     { "source": "/api/angel",       "destination": "/api/angel.js" },
     { "source": "/api/yahoo",       "destination": "/api/yahoo.js" },
-    { "source": "/api/candles",     "destination": "/api/candles.js" }
+    { "source": "/api/candles",     "destination": "/api/candles.js" },
+    { "source": "/api/scan",        "destination": "/api/scan.js" }
   ]
 }
