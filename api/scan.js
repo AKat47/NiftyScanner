@@ -113,7 +113,8 @@ async function fetchFromAngel(symbol, from, to) {
 }
 
 async function fetchFromYahoo(symbol, from, to) {
-  const ticker = symbol.includes('.') ? symbol : symbol + '.NS';
+  // Pass index tickers (^NSEI) and already-qualified tickers as-is
+  const ticker = (symbol.startsWith('^') || symbol.includes('.')) ? symbol : symbol + '.NS';
   const fromTs = Math.floor(new Date(from).getTime() / 1000);
   const toTs   = Math.floor(new Date(to).getTime()   / 1000);
   const data   = await httpsGet(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&period1=${fromTs}&period2=${toTs}&includePrePost=false`);
@@ -129,13 +130,21 @@ async function fetchFromYahoo(symbol, from, to) {
 }
 
 // Fetch one symbol with Angel→Yahoo fallback and write to MongoDB
+// Map special index symbols to their Yahoo tickers
+const YAHOO_OVERRIDES = { 'NIFTY50': '^NSEI', 'SENSEX': '^BSESN' };
+
 async function fetchAndCache(col, symbol, from, to, today) {
   let candles, source;
+  // Index symbols (e.g. NIFTY50) go straight to Yahoo — no Angel lookup
+  const isIndex = !!YAHOO_OVERRIDES[symbol];
   try {
+    if (isIndex) throw new Error('index — skip angel');
     candles = await fetchFromAngel(symbol, from, to); source = 'angel';
   } catch {
     try {
-      candles = await fetchFromYahoo(symbol, from, to); source = 'yahoo';
+      // For index symbols substitute the real Yahoo ticker
+      const yahooSym = YAHOO_OVERRIDES[symbol] || symbol;
+      candles = await fetchFromYahoo(yahooSym, from, to); source = 'yahoo';
     } catch (e) {
       throw new Error('All sources failed for ' + symbol + ': ' + e.message);
     }
