@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Nifty Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0b0d0c;--bg2:#141716;--bg3:#1c1f1d;--bg4:#252928;
+  --txt:#e8ede9;--txt2:#8a9b8d;--txt3:#4d5c50;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+  --green:#4ade80;--green-dim:#162a1e;
+  --red:#f87171;--red-dim:#2a1212;
+  --amber:#fbbf24;--amber-dim:#2a1f08;
+  --blue:#60a5fa;--accent:#3dffa0;
+  --r:8px;--rl:14px;
+}
+html,body{height:100%;background:#000;}
+body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
+.app{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);}
+.pb{padding-bottom:72px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 13px;border-bottom:0.5px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:30;}
+.brand-name{font-size:16px;font-weight:700;color:var(--txt);letter-spacing:-.3px;}
+.brand-sub{font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;margin-top:2px;}
+.status-pill{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:0.5px solid var(--border2);background:var(--bg2);cursor:pointer;}
+.dot{width:7px;height:7px;border-radius:50%;}
+.status-txt{font-size:11px;color:var(--txt2);font-family:'DM Mono',monospace;}
+.sector-strip{display:flex;overflow-x:auto;border-bottom:0.5px solid var(--border);scrollbar-width:none;padding:0 6px;}
+.sector-strip::-webkit-scrollbar{display:none;}
+.sec-tab{flex-shrink:0;padding:11px 13px;font-size:12px;font-weight:500;color:var(--txt3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.sec-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.scan-bar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:0.5px solid var(--border);}
+.scan-info{flex:1;font-size:12px;color:var(--txt2);}
+.scan-info b{color:var(--txt);font-weight:600;}
+.scan-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;background:var(--accent);color:#050f08;font-size:12px;font-weight:700;border:none;border-radius:20px;cursor:pointer;font-family:'Sora',sans-serif;white-space:nowrap;}
+.scan-btn:active{opacity:.75;}
+.scan-btn:disabled{opacity:.35;cursor:not-allowed;}
+.counts-bar{display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--border);gap:0.5px;border-bottom:0.5px solid var(--border);}
+.count-cell{background:var(--bg);padding:11px 6px;text-align:center;}
+.count-num{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-.5px;}
+.count-num.buy{color:var(--green);}
+.count-num.watch{color:var(--amber);}
+.count-num.sell{color:var(--red);}
+.count-lbl{font-size:9px;color:var(--txt3);margin-top:1px;text-transform:uppercase;letter-spacing:.07em;}
+.list-header{display:flex;align-items:center;justify-content:space-between;padding:11px 16px 5px;}
+.list-label{font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.08em;font-family:'DM Mono',monospace;}
+.manage-link{font-size:12px;color:var(--blue);cursor:pointer;}
+.group-label{font-size:10px;font-weight:600;color:var(--txt3);padding:12px 16px 5px;text-transform:uppercase;letter-spacing:.08em;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:8px;}
+.group-label::after{content:'';flex:1;height:0.5px;background:var(--border);}
+.sig-card{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .1s;}
+.sig-card:active{background:var(--bg2);}
+.sig-badge{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;font-family:'DM Mono',monospace;}
+.sig-badge.buy{background:var(--green-dim);color:var(--green);}
+.sig-badge.sell{background:var(--red-dim);color:var(--red);}
+.sig-badge.watch{background:var(--amber-dim);color:var(--amber);}
+.sig-meta{flex:1;min-width:0;}
+.sig-sym{font-size:14px;font-weight:600;color:var(--txt);font-family:'DM Mono',monospace;}
+.sig-src{font-size:9px;font-family:'DM Mono',monospace;margin-top:1px;}
+.sig-src.kite{color:#60a5fa;}
+.sig-src.angel{color:#f59e0b;}
+.sig-src.yahoo{color:#a78bfa;}
+.sig-pips{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;}
+.pip{padding:2px 5px;border-radius:3px;font-size:9px;font-weight:600;font-family:'DM Mono',monospace;}
+.pip.pass{background:var(--green-dim);color:var(--green);}
+.pip.fail{background:var(--bg4);color:var(--txt3);}
+.pip.off{background:var(--bg4);color:var(--txt3);opacity:.3;text-decoration:line-through;}
+.sig-right{text-align:right;flex-shrink:0;}
+.sig-price{font-size:14px;font-weight:600;color:var(--txt);font-family:'DM Mono',monospace;}
+.sig-chg{font-size:11px;margin-top:3px;font-family:'DM Mono',monospace;}
+.pos{color:var(--green);}
+.neg{color:var(--red);}
+.back-row{display:flex;align-items:center;gap:5px;padding:14px 16px 8px;cursor:pointer;color:var(--txt2);font-size:13px;}
+.d-hero{padding:4px 16px 18px;border-bottom:0.5px solid var(--border);}
+.d-sym{font-size:26px;font-weight:700;color:var(--txt);font-family:'DM Mono',monospace;letter-spacing:-.5px;}
+.d-sector-lbl{font-size:11px;color:var(--txt3);margin-top:3px;}
+.d-price{font-size:32px;font-weight:700;color:var(--txt);margin-top:12px;font-family:'DM Mono',monospace;letter-spacing:-1px;}
+.d-chg{font-size:13px;margin-top:4px;font-family:'DM Mono',monospace;}
+.verdict{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:7px 16px;border-radius:20px;font-size:12px;font-weight:700;}
+.verdict.buy{background:var(--green-dim);color:var(--green);}
+.verdict.sell{background:var(--red-dim);color:var(--red);}
+.verdict.watch{background:var(--amber-dim);color:var(--amber);}
+.cond-box{margin:14px 16px 0;background:var(--bg2);border-radius:var(--rl);border:0.5px solid var(--border);overflow:hidden;}
+.cond-box-title{font-size:10px;font-weight:600;color:var(--txt3);padding:11px 14px 9px;text-transform:uppercase;letter-spacing:.07em;font-family:'DM Mono',monospace;border-bottom:0.5px solid var(--border);}
+.cond-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:0.5px solid var(--border);gap:10px;}
+.cond-row:last-child{border-bottom:none;}
+.cond-row.off{opacity:.35;}
+.cond-left{display:flex;align-items:center;gap:9px;flex:1;min-width:0;}
+.cond-check{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.cond-check.pass{background:var(--green-dim);color:var(--green);}
+.cond-check.fail{background:var(--red-dim);color:var(--red);}
+.cond-check.off{background:var(--bg4);color:var(--txt3);}
+.cond-name{font-size:12px;color:var(--txt);line-height:1.35;}
+.cond-val{font-size:11px;color:var(--txt2);text-align:right;white-space:nowrap;font-family:'DM Mono',monospace;}
+.sl-note{margin:12px 16px 0;background:var(--amber-dim);border:0.5px solid rgba(251,191,36,.15);border-radius:var(--r);padding:11px 14px;font-size:12px;color:var(--amber);line-height:1.6;}
+/* source badge in detail */
+.src-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace;}
+.src-badge.kite{background:rgba(96,165,250,.12);color:#60a5fa;}
+.src-badge.angel{background:rgba(245,158,11,.12);color:#f59e0b;}
+.src-badge.yahoo{background:rgba(167,139,250,.12);color:#a78bfa;}
+/* Splash / auth screen */
+.splash{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80dvh;padding:32px 24px;text-align:center;gap:12px;}
+.splash-icon{font-size:48px;margin-bottom:8px;}
+.splash-title{font-size:18px;font-weight:700;color:var(--txt);}
+.splash-sub{font-size:13px;color:var(--txt3);line-height:1.7;}
+.splash-error{font-size:12px;color:var(--red);background:var(--red-dim);padding:10px 16px;border-radius:var(--r);margin-top:8px;line-height:1.6;text-align:left;width:100%;}
+.retry-btn{padding:10px 28px;background:var(--accent);color:#050f08;font-size:13px;font-weight:700;border:none;border-radius:20px;cursor:pointer;font-family:'Sora',sans-serif;margin-top:8px;}
+/* Manage modal */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;display:flex;align-items:flex-end;justify-content:center;}
+.modal{background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:18px 16px 36px;border-top:0.5px solid var(--border2);max-height:80dvh;overflow-y:auto;}
+.modal-handle{width:36px;height:3px;background:var(--bg4);border-radius:2px;margin:0 auto 16px;}
+.modal-title{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:14px;}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
+.chip{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:20px;font-size:12px;color:var(--txt);font-family:'DM Mono',monospace;}
+.chip-x{color:var(--txt3);cursor:pointer;font-size:15px;line-height:1;}
+.chip-x:hover{color:var(--red);}
+.add-row{display:flex;gap:8px;}
+.add-input{flex:1;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--r);padding:9px 12px;font-size:13px;color:var(--txt);font-family:'DM Mono',monospace;text-transform:uppercase;outline:none;}
+.add-input:focus{border-color:var(--accent);}
+.add-btn{padding:9px 16px;background:var(--accent);color:#050f08;font-size:13px;font-weight:700;border:none;border-radius:var(--r);cursor:pointer;font-family:'Sora',sans-serif;}
+.modal-close{width:100%;padding:11px;background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--r);color:var(--txt2);font-size:14px;cursor:pointer;margin-top:14px;font-family:'Sora',sans-serif;}
+/* Setup */
+.setup-wrap{padding:16px;}
+.setup-card{background:var(--bg2);border-radius:var(--rl);border:0.5px solid var(--border);padding:18px;margin-bottom:14px;}
+.setup-card h3{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:14px;}
+.full-btn{width:100%;padding:12px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--bg3);color:var(--txt);font-size:14px;font-weight:600;cursor:pointer;font-family:'Sora',sans-serif;margin-bottom:8px;display:block;text-align:center;text-decoration:none;}
+.full-btn.primary{background:var(--accent);color:#050f08;border-color:transparent;}
+.full-btn.danger{background:var(--red-dim);color:var(--red);border-color:transparent;}
+.full-btn:active{opacity:.75;}
+/* Toggles */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:0.5px solid var(--border);gap:12px;}
+.toggle-row:last-of-type{border-bottom:none;}
+.toggle-info{flex:1;}
+.toggle-label{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:2px;}
+.toggle-desc{font-size:11px;color:var(--txt2);font-family:'DM Mono',monospace;}
+.toggle{width:44px;height:24px;border-radius:12px;background:var(--bg4);border:0.5px solid var(--border2);cursor:pointer;position:relative;flex-shrink:0;transition:background .2s;}
+.toggle.on{background:var(--accent);border-color:var(--accent);}
+.toggle-knob{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+.toggle.on .toggle-knob{transform:translateX(20px);}
+/* Field input in setup */
+.field-row{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+.field-label{font-size:11px;color:var(--txt3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.06em;}
+.field-input{background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--r);padding:10px 12px;font-size:13px;color:var(--txt);font-family:'DM Mono',monospace;outline:none;width:100%;}
+.field-input:focus{border-color:var(--accent);}
+.field-input[type=password]{letter-spacing:.15em;}
+/* Source chain visual */
+.chain-row{display:flex;align-items:center;gap:6px;padding:12px 0;border-bottom:0.5px solid var(--border);}
+.chain-row:last-child{border-bottom:none;}
+.chain-num{width:20px;height:20px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--txt3);flex-shrink:0;font-family:'DM Mono',monospace;}
+.chain-info{flex:1;}
+.chain-name{font-size:13px;font-weight:600;color:var(--txt);}
+.chain-desc{font-size:11px;color:var(--txt3);margin-top:2px;}
+.chain-status{font-size:10px;font-weight:700;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:10px;}
+.chain-status.ok{background:var(--green-dim);color:var(--green);}
+.chain-status.warn{background:var(--amber-dim);color:var(--amber);}
+.chain-status.off{background:var(--bg4);color:var(--txt3);}
+.how-step{display:flex;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;}
+.how-step:last-child{border-bottom:none;}
+.how-num{color:var(--accent);font-family:'DM Mono',monospace;font-weight:700;flex-shrink:0;width:18px;}
+.how-txt{color:var(--txt2);line-height:1.5;}
+.spinner-wrap{display:flex;flex-direction:column;align-items:center;padding:60px 20px;gap:14px;}
+.spinner{width:24px;height:24px;border:2px solid var(--bg4);border-top-color:var(--accent);border-radius:50%;animation:spin .65s linear infinite;}
+.spinner.sm{width:13px;height:13px;border-width:2px;margin:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spin-txt{font-size:12px;color:var(--txt3);}
+.empty{text-align:center;padding:56px 20px;color:var(--txt3);font-size:13px;line-height:1.8;}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--txt);color:var(--bg);font-size:13px;font-weight:600;padding:9px 20px;border-radius:24px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;z-index:99;}
+.toast.show{opacity:1;}
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;display:flex;border-top:0.5px solid var(--border);background:var(--bg);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
+.bnav{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 0 8px;cursor:pointer;color:var(--txt3);gap:3px;border:none;background:none;-webkit-tap-highlight-color:transparent;}
+.bnav.active{color:var(--accent);}
+.bnav-icon{font-size:18px;line-height:1;}
+.bnav-lbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-family:'DM Mono',monospace;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="brand-name">Nifty Scanner</div>
+      <div class="brand-sub" id="brandSub">50/200 · RSI(14) · VOL · 52W</div>
+    </div>
+    <div class="status-pill" onclick="switchTab('setup')">
+      <div class="dot" id="connDot" style="background:#4d5c50"></div>
+      <span class="status-txt" id="connLabel">Connecting…</span>
+    </div>
+  </div>
+  <div id="content" class="pb"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="bottom-nav">
+  <button class="bnav active" id="bnav-scanner" onclick="switchTab('scanner')">
+    <div class="bnav-icon">◈</div><div class="bnav-lbl">Scanner</div>
+  </button>
+  <button class="bnav" id="bnav-setup" onclick="switchTab('setup')">
+    <div class="bnav-icon">◧</div><div class="bnav-lbl">Setup</div>
+  </button>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────
+var S = {
+  tab:'scanner', activeSector:'IT', detail:null,
+  scanning:false, authLoading:true, authError:null,
+
+  // Per-source connection state
+  sources: {
+    kite:  { connected:false, token:'', userName:'', error:null },
+    angel: { connected:false, error:null },
+    yahoo: { connected:true,  error:null }  // always available (no auth)
+  },
+
+  // Angel One credentials stored locally
+  angelCreds: {
+    apiKey: localStorage.getItem('angel_api_key')||'',
+    clientId: localStorage.getItem('angel_client_id')||''
+  },
+
+  results:{}, modal:false,
+  strategy:{
+    trendConfirmed:true, priceAlignment:true,
+    volCondition:true, rsiCondition:true, nearHigh:true
+  }
+};
+
+// ── Sectors ────────────────────────────────────────────
+var SECTORS = {
+  'IT':     {label:'IT / Tech',   icon:'💻', symbols:['TCS','INFY','WIPRO','HCLTECH','TECHM','LTIM','PERSISTENT','MPHASIS','COFORGE','KPITTECH']},
+  'BANK':   {label:'Banking',     icon:'🏦', symbols:['HDFCBANK','ICICIBANK','KOTAKBANK','AXISBANK','SBIN','INDUSINDBK','BANDHANBNK','FEDERALBNK','IDFCFIRSTB','AUBANK']},
+  'PHARMA': {label:'Pharma',      icon:'💊', symbols:['SUNPHARMA','DRREDDY','CIPLA','DIVISLAB','AUROPHARMA','LUPIN','TORNTPHARM','ALKEM','IPCALAB','ABBOTINDIA']},
+  'AUTO':   {label:'Auto / EV',   icon:'🚗', symbols:['MARUTI','TATAMOTORS','M&M','BAJAJ-AUTO','HEROMOTOCO','EICHERMOT','ASHOKLEY','TVSMOTOR','OLECTRA','MOTHERSON']},
+  'FMCG':   {label:'FMCG',        icon:'🛒', symbols:['HINDUNILVR','ITC','NESTLEIND','BRITANNIA','DABUR','MARICO','GODREJCP','EMAMILTD','COLPAL','TATACONSUM']},
+  'ENERGY': {label:'Energy',      icon:'⚡', symbols:['RELIANCE','ONGC','IOC','BPCL','NTPC','POWERGRID','ADANIGREEN','TATAPOWER','CESC','TORNTPOWER']},
+  'INFRA':  {label:'Infra / RE',  icon:'🏗️', symbols:['LT','ADANIPORTS','DLF','GODREJPROP','OBEROIRLTY','PRESTIGE','PHOENIXLTD','BRIGADE','IRFC','GMRINFRA']},
+  'ALL':    {label:'All Sectors', icon:'🔭', symbols:[]}
+};
+SECTORS['ALL'].symbols = [].concat.apply([],
+  Object.keys(SECTORS).filter(function(k){return k!=='ALL';})
+  .map(function(k){return SECTORS[k].symbols;})
+).filter(function(v,i,a){return a.indexOf(v)===i;});
+
+var userSyms = {};
+Object.keys(SECTORS).forEach(function(k){ userSyms[k]=SECTORS[k].symbols.slice(); });
+
+// ── Source priority ─────────────────────────────────────
+// Returns ordered list of sources to try: kite first if connected, then angel, then yahoo
+function sourcePriority() {
+  var order = [];
+  if (S.sources.kite.connected)  order.push('kite');
+  if (S.sources.angel.connected) order.push('angel');
+  order.push('yahoo'); // always last fallback
+  return order;
+}
+
+function activeSource() {
+  if (S.sources.kite.connected)  return 'kite';
+  if (S.sources.angel.connected) return 'angel';
+  return 'yahoo';
+}
+
+// ── Kite auth ──────────────────────────────────────────
+function initKite() {
+  var saved    = localStorage.getItem('kite_access_token');
+  var savedDay = localStorage.getItem('kite_token_date');
+  var today    = new Date().toDateString();
+
+  if (saved && savedDay === today) {
+    S.sources.kite.connected = true;
+    S.sources.kite.token     = saved;
+    S.sources.kite.userName  = localStorage.getItem('kite_user_name') || '';
+    S.authLoading = false;
+    updateConnPill();
+    render();
+  } else {
+    localStorage.removeItem('kite_access_token');
+    localStorage.removeItem('kite_token_date');
+    fetchKiteToken();
+  }
+}
+
+function fetchKiteToken() {
+  S.authLoading = true;
+  render();
+  fetch('/api/auth')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.error) throw new Error(data.error);
+      S.sources.kite.connected = true;
+      S.sources.kite.token     = data.access_token;
+      S.sources.kite.userName  = data.user_name || '';
+      S.sources.kite.error     = null;
+      localStorage.setItem('kite_access_token', data.access_token);
+      localStorage.setItem('kite_token_date', new Date().toDateString());
+      localStorage.setItem('kite_user_name', data.user_name || '');
+    })
+    .catch(function(err){
+      S.sources.kite.connected = false;
+      S.sources.kite.error     = err.message;
+    })
+    .then(function(){
+      // After Kite attempt, try Angel if credentials exist
+      initAngel().then(function(){
+        S.authLoading = false;
+        updateConnPill();
+        render();
+      });
+    });
+}
+
+// ── Angel One auth ─────────────────────────────────────
+function initAngel() {
+  if (!S.angelCreds.apiKey) {
+    S.sources.angel.connected = false;
+    return Promise.resolve();
+  }
+  return fetch('/api/angel?action=auth')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.ok) {
+        S.sources.angel.connected = true;
+        S.sources.angel.error     = null;
+      } else throw new Error(data.error || 'Angel auth failed');
+    })
+    .catch(function(err){
+      S.sources.angel.connected = false;
+      S.sources.angel.error     = err.message;
+    });
+}
+
+// ── Kite API ───────────────────────────────────────────
+var tokenCache = {};
+
+function kiteGet(path) {
+  return fetch('/api/kite' + path, {
+    headers: { 'X-Access-Token': S.sources.kite.token }
+  }).then(function(r){
+    if (!r.ok) return r.json().then(function(e){ throw new Error(e.message||r.status); });
+    return r.json();
+  });
+}
+
+function getInstrumentTokens(syms) {
+  var needed = syms.filter(function(s){return !tokenCache[s];});
+  if (!needed.length) return Promise.resolve();
+  return kiteGet('/instruments/NSE').then(function(json){
+    var list = json.data || [];
+    list.forEach(function(inst){
+      if (inst.segment==='NSE' && inst.instrument_type==='EQ')
+        tokenCache[inst.tradingsymbol] = inst.instrument_token;
+    });
+  }).catch(function(e){ console.warn('instruments fetch error:', e.message); });
+}
+
+function kiteHistory(sym) {
+  var token = tokenCache[sym];
+  if (!token) throw new Error('no token for ' + sym);
+  var range = getDateRange();
+  return kiteGet('/instruments/historical/'+token+'/day?from='+range.from+'&to='+range.to+'&continuous=0')
+    .then(function(json){
+      var candles = json.data && json.data.candles ? json.data.candles : [];
+      if (!candles.length) throw new Error('empty kite candles');
+      return candles; // [ts, o, h, l, c, v]
+    });
+}
+
+// ── Angel One API ──────────────────────────────────────
+function angelHistory(sym) {
+  var range = getDateRange();
+  return fetch('/api/angel?action=history&symbol='+encodeURIComponent(sym)+'&from='+range.from+'&to='+range.to)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.ok) throw new Error(data.error || 'angel error');
+      return data.candles; // same format [ts, o, h, l, c, v]
+    });
+}
+
+// ── Yahoo Finance API ──────────────────────────────────
+function yahooHistory(sym) {
+  var range = getDateRange();
+  return fetch('/api/yahoo?symbol='+encodeURIComponent(sym)+'&from='+range.from+'&to='+range.to)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.ok) throw new Error(data.error || 'yahoo error');
+      return data.candles; // same format [ts, o, h, l, c, v]
+    });
+}
+
+// ── Fallback chain ─────────────────────────────────────
+function fetchCandlesWithFallback(sym, sector) {
+  var priority = sourcePriority();
+  var fetchFns = {
+    kite:  function(){ return kiteHistory(sym); },
+    angel: function(){ return angelHistory(sym); },
+    yahoo: function(){ return yahooHistory(sym); }
+  };
+
+  // Sequential fallback: try each source; if it fails, move to next
+  function tryNext(idx) {
+    if (idx >= priority.length) return Promise.reject(new Error('All sources failed for ' + sym));
+    var src = priority[idx];
+    return fetchFns[src]()
+      .then(function(candles){ return { candles:candles, source:src }; })
+      .catch(function(err){
+        console.warn(sym + ' failed on ' + src + ':', err.message, '— trying next source');
+        return tryNext(idx + 1);
+      });
+  }
+
+  // For Kite we need instrument tokens preloaded
+  var prep = (priority[0] === 'kite') ? getInstrumentTokens([sym]).catch(function(){}) : Promise.resolve();
+
+  return prep.then(function(){ return tryNext(0); });
+}
+
+// ── Strategy calculations ──────────────────────────────
+function sma(arr, n) {
+  var s = arr.slice(-n);
+  return s.length < n ? null : s.reduce(function(a,b){return a+b;},0)/n;
+}
+
+function calcRSI(closes) {
+  var n=14;
+  if (closes.length < n+1) return null;
+  var sl=closes.slice(-(n+1)), g=0, l=0;
+  for (var i=1;i<sl.length;i++){
+    var d=sl[i]-sl[i-1]; if(d>0) g+=d; else l+=Math.abs(d);
+  }
+  var ag=g/n, al=l/n;
+  return al===0?100:100-(100/(1+(ag/al)));
+}
+
+function applyStrategy(raw, symbol, sector, source) {
+  var closes = raw.map(function(c){return c[4];});
+  var highs   = raw.map(function(c){return c[2];});
+  var vols    = raw.map(function(c){return c[5];});
+
+  var close  = closes[closes.length-1];
+  var prev   = closes[closes.length-2]||close;
+  var s50    = sma(closes,50);
+  var s200   = sma(closes,200);
+  var rsiVal = calcRSI(closes);
+  var high52 = Math.max.apply(null, highs.slice(-252));
+  var vol    = vols[vols.length-1];
+  var avgVol = sma(vols.slice(-10),10);
+
+  var trendConfirmed = s50&&s200 ? s50>s200 : false;
+  var priceAlignment = s50&&s200 ? close>s50&&close>s200 : false;
+  var volCondition   = avgVol ? vol>avgVol*1.5 : false;
+  var rsiCondition   = rsiVal ? rsiVal>55 : false;
+  var nearHigh       = high52 ? close>high52*0.90 : false;
+
+  var keys=['trendConfirmed','priceAlignment','volCondition','rsiCondition','nearHigh'];
+  var vals={trendConfirmed,priceAlignment,volCondition,rsiCondition,nearHigh};
+  var buySignal  = keys.every(function(k){return !S.strategy[k]||vals[k];});
+  var sellSignal = s50 ? close<s50 : false;
+  var passCount  = keys.filter(function(k){return S.strategy[k]&&vals[k];}).length;
+  var totalActive= keys.filter(function(k){return S.strategy[k];}).length;
+
+  return {
+    symbol,sector,source,
+    close,chg:prev?((close-prev)/prev*100):0,
+    sma50:s50,sma200:s200,rsiVal,high52,vol,avgVol,
+    trendConfirmed,priceAlignment,volCondition,rsiCondition,nearHigh,
+    signal:buySignal?'buy':sellSignal?'sell':'watch',
+    passCount,totalActive,
+    stopLoss:(close*0.92).toFixed(2),
+    hi52pct:high52?((close/high52)*100).toFixed(1):'—',
+    volRatio:avgVol?(vol/avgVol).toFixed(1):'—'
+  };
+}
+
+function getDateRange() {
+  var to   = new Date();
+  var from = new Date(); from.setDate(from.getDate()-400);
+  return { from:from.toISOString().split('T')[0], to:to.toISOString().split('T')[0] };
+}
+
+function scanSymbol(sym, sector) {
+  return fetchCandlesWithFallback(sym, sector)
+    .then(function(result){
+      S.results[sym] = applyStrategy(result.candles, sym, sector, result.source);
+    })
+    .catch(function(e){ console.warn('scanSymbol failed for', sym, e.message); });
+}
+
+function liveScanSector(sec) {
+  var syms = userSyms[sec];
+  return syms.reduce(function(chain, sym){
+    return chain.then(function(){
+      return scanSymbol(sym, sec).catch(function(){});
+    });
+  }, Promise.resolve());
+}
+
+function triggerScan(sec) {
+  S.scanning=true; render();
+  liveScanSector(sec)
+    .catch(function(e){ showToast('Scan error: '+e.message); })
+    .then(function(){ S.scanning=false; render(); });
+}
+
+function scanAll() {
+  S.scanning=true; render();
+  var secs=Object.keys(SECTORS).filter(function(k){return k!=='ALL';});
+  var chain=Promise.resolve();
+  secs.forEach(function(sec){
+    chain=chain.then(function(){ return liveScanSector(sec).catch(function(){}); });
+  });
+  chain.then(function(){ S.scanning=false; render(); });
+}
+
+// ── Helpers ────────────────────────────────────────────
+function fmt(n){return Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});}
+function fmtPct(n){return(n>=0?'+':'')+Number(n).toFixed(2)+'%';}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2400);
+}
+
+function updateConnPill() {
+  var src = activeSource();
+  var colors = { kite:'#4ade80', angel:'#f59e0b', yahoo:'#a78bfa' };
+  var labels = { kite:'Live · Kite', angel:'Live · Angel', yahoo:'Yahoo Finance' };
+  if (!S.sources.kite.connected && !S.sources.angel.connected) {
+    document.getElementById('connDot').style.background = '#a78bfa';
+    document.getElementById('connLabel').textContent = 'Yahoo fallback';
+  } else {
+    document.getElementById('connDot').style.background = colors[src] || '#4d5c50';
+    document.getElementById('connLabel').textContent = labels[src] || src;
+  }
+}
+
+function switchTab(tab){
+  S.tab=tab; S.detail=null;
+  document.querySelectorAll('.bnav').forEach(function(e){e.classList.remove('active');});
+  var el=document.getElementById('bnav-'+tab); if(el) el.classList.add('active');
+  render();
+}
+
+function removeSymbol(sec,sym){
+  userSyms[sec]=userSyms[sec].filter(function(s){return s!==sym;});
+  if(sec!=='ALL') userSyms['ALL']=userSyms['ALL'].filter(function(s){return s!==sym;});
+  render();
+}
+
+function addSymbol(sec){
+  var inp=document.getElementById('newSymInput'); if(!inp) return;
+  var val=inp.value.trim().toUpperCase();
+  if(!val){showToast('Enter a symbol');return;}
+  if(userSyms[sec].indexOf(val)!==-1){showToast(val+' already added');return;}
+  userSyms[sec].push(val);
+  if(sec!=='ALL'&&userSyms['ALL'].indexOf(val)===-1) userSyms['ALL'].push(val);
+  inp.value=''; render();
+  setTimeout(function(){var e=document.getElementById('newSymInput');if(e)e.focus();},40);
+}
+
+function toggleCond(key){
+  S.strategy[key]=!S.strategy[key];
+  Object.keys(S.results).forEach(function(sym){
+    var r=S.results[sym]; if(!r||r.quoteOnly) return;
+    var keys=['trendConfirmed','priceAlignment','volCondition','rsiCondition','nearHigh'];
+    var buySignal=keys.every(function(k){return !S.strategy[k]||r[k];});
+    r.passCount=keys.filter(function(k){return S.strategy[k]&&r[k];}).length;
+    r.totalActive=keys.filter(function(k){return S.strategy[k];}).length;
+    r.signal=buySignal?'buy':(r.sma50&&r.close<r.sma50?'sell':'watch');
+  });
+  render();
+}
+
+function saveAngelCreds() {
+  var apiKey   = (document.getElementById('angelApiKey')||{}).value || '';
+  var clientId = (document.getElementById('angelClientId')||{}).value || '';
+  localStorage.setItem('angel_api_key',   apiKey);
+  localStorage.setItem('angel_client_id', clientId);
+  S.angelCreds.apiKey   = apiKey;
+  S.angelCreds.clientId = clientId;
+  showToast('Angel creds saved — reconnecting…');
+  initAngel().then(function(){ updateConnPill(); render(); });
+}
+
+// ── Render helpers ─────────────────────────────────────
+function srcLabel(src) {
+  return src === 'kite' ? 'Kite' : src === 'angel' ? 'Angel' : 'Yahoo';
+}
+
+// ── Render: auth splash ────────────────────────────────
+function renderSplash(){
+  return '<div class="splash">'
+    +'<div class="spinner"></div>'
+    +'<div class="splash-title" style="margin-top:12px">Connecting…</div>'
+    +'<div class="splash-sub">Trying Kite → Angel One → Yahoo Finance</div>'
+    +'</div>';
+}
+
+// ── Render: Scanner ────────────────────────────────────
+function renderScanner(){
+  if(S.authLoading) return renderSplash();
+
+  var sec   = S.activeSector;
+  var syms  = userSyms[sec];
+  var scanned = syms.filter(function(s){return !!S.results[s];});
+  var buys  = scanned.filter(function(s){return S.results[s].signal==='buy';});
+  var sells = scanned.filter(function(s){return S.results[s].signal==='sell';});
+  var watches = scanned.filter(function(s){return S.results[s].signal==='watch';});
+
+  var strip = Object.keys(SECTORS).map(function(k){
+    return '<div class="sec-tab '+(k===sec?'active':'')+'" onclick="S.activeSector=\''+k+'\';render()">'+SECTORS[k].icon+' '+SECTORS[k].label+'</div>';
+  }).join('');
+
+  var scanBtn = S.scanning
+    ? '<button class="scan-btn" disabled><div class="spinner sm"></div> Scanning…</button>'
+    : (sec==='ALL'
+      ? '<button class="scan-btn" onclick="scanAll()">◈ Scan All</button>'
+      : '<button class="scan-btn" onclick="triggerScan(\''+sec+'\')">▶ Scan</button>');
+
+  var scanBar = '<div class="scan-bar"><div class="scan-info">'
+    +(scanned.length?'<b>'+scanned.length+'</b>/<b>'+syms.length+'</b> scanned':'<b>'+syms.length+'</b> ready')
+    +'</div>'+scanBtn+'</div>';
+
+  var counts = scanned.length
+    ? '<div class="counts-bar">'
+      +'<div class="count-cell"><div class="count-num buy">'+buys.length+'</div><div class="count-lbl">Buy</div></div>'
+      +'<div class="count-cell"><div class="count-num watch">'+watches.length+'</div><div class="count-lbl">Watch</div></div>'
+      +'<div class="count-cell"><div class="count-num sell">'+sells.length+'</div><div class="count-lbl">Sell</div></div>'
+      +'</div>' : '';
+
+  var listHdr = '<div class="list-header"><div class="list-label">'+syms.length+' symbols</div><div class="manage-link" onclick="S.modal=true;render()">+ Manage</div></div>';
+
+  var results = '';
+  if(S.scanning){
+    results='<div class="spinner-wrap"><div class="spinner"></div><div class="spin-txt">Fetching data (Kite → Angel → Yahoo)…</div></div>';
+  } else if(!scanned.length){
+    results='<div class="empty">Tap <b style="color:var(--txt2)">Scan</b> to run strategy<br>on <b style="color:var(--txt2)">'+syms.length+' '+SECTORS[sec].label+'</b> stocks.</div>';
+  } else {
+    function grp(arr,lbl){
+      if(!arr.length) return '';
+      return '<div class="group-label">'+lbl+' ('+arr.length+')</div>'+arr.map(function(s){return sigCard(S.results[s]);}).join('');
+    }
+    results = grp(buys,'BUY — conditions met') + grp(watches,'WATCHING') + grp(sells,'EXIT / SELL');
+  }
+
+  var modal = '';
+  if(S.modal){
+    var chips = userSyms[sec].map(function(s){
+      return '<div class="chip">'+s+'<span class="chip-x" onclick="removeSymbol(\''+sec+'\',\''+s+'\')">×</span></div>';
+    }).join('');
+    modal = '<div class="backdrop" onclick="if(event.target===this){S.modal=false;render();}">'
+      +'<div class="modal"><div class="modal-handle"></div>'
+      +'<div class="modal-title">'+SECTORS[sec].icon+' '+SECTORS[sec].label+'</div>'
+      +'<div class="chips">'+chips+'</div>'
+      +'<div class="add-row"><input class="add-input" id="newSymInput" type="text" placeholder="SYMBOL" maxlength="20" onkeydown="if(event.key===\'Enter\')addSymbol(\''+sec+'\')">'
+      +'<button class="add-btn" onclick="addSymbol(\''+sec+'\')">Add</button></div>'
+      +'<button class="modal-close" onclick="S.modal=false;render()">Done</button>'
+      +'</div></div>';
+  }
+
+  return '<div class="sector-strip">'+strip+'</div>'+scanBar+counts+listHdr+results+modal;
+}
+
+function sigCard(s){
+  var condKeys=[
+    {k:'trendConfirmed',l:'Trend'},{k:'priceAlignment',l:'Price'},
+    {k:'volCondition',l:'Vol'},{k:'rsiCondition',l:'RSI'},{k:'nearHigh',l:'52W'}
+  ];
+  var pips = condKeys.map(function(c){
+    if(!S.strategy[c.k]) return '<span class="pip off">'+c.l+'</span>';
+    return '<span class="pip '+(s[c.k]?'pass':'fail')+'">'+c.l+'</span>';
+  }).join('');
+  var label = s.signal==='buy'?'BUY':s.signal==='sell'?'SELL':'HOLD';
+  var srcCls = s.source || 'yahoo';
+  return '<div class="sig-card" onclick="S.detail=\''+s.symbol+'\';render()">'
+    +'<div class="sig-badge '+s.signal+'">'+label+'</div>'
+    +'<div class="sig-meta">'
+      +'<div class="sig-sym">'+s.symbol+'</div>'
+      +'<div class="sig-src '+srcCls+'">via '+srcLabel(srcCls)+'</div>'
+      +'<div class="sig-pips">'+pips+'</div>'
+    +'</div>'
+    +'<div class="sig-right"><div class="sig-price">₹'+fmt(s.close)+'</div>'
+    +'<div class="sig-chg '+(s.chg>=0?'pos':'neg')+'">'+fmtPct(s.chg)+'</div></div>'
+    +'</div>';
+}
+
+// ── Render: Detail ─────────────────────────────────────
+function renderDetail(){
+  var s = S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
+  var secLabel = SECTORS[s.sector]?SECTORS[s.sector].label:s.sector;
+  var conds=[
+    {k:'trendConfirmed', label:'SMA50 > SMA200',          val:s.sma50?'₹'+fmt(s.sma50)+' vs ₹'+fmt(s.sma200):'—'},
+    {k:'priceAlignment', label:'Close > SMA50 & SMA200',  val:'₹'+fmt(s.close)},
+    {k:'volCondition',   label:'Volume > 1.5× avg',       val:s.volRatio+'×'},
+    {k:'rsiCondition',   label:'RSI(14) > 55',            val:s.rsiVal?'RSI '+Number(s.rsiVal).toFixed(1):'—'},
+    {k:'nearHigh',       label:'Within 10% of 52W high',  val:s.hi52pct+'%'}
+  ];
+  var vTxt = s.signal==='buy'?'▲ BUY SIGNAL':s.signal==='sell'?'▼ EXIT / SELL':'◉ WATCHING';
+  var condRows = conds.map(function(c){
+    var active=S.strategy[c.k], pass=s[c.k];
+    var cls=!active?'off':pass?'pass':'fail';
+    var icon=!active?'—':pass?'✓':'✗';
+    return '<div class="cond-row '+(active?'':'off')+'">'
+      +'<div class="cond-left"><div class="cond-check '+cls+'">'+icon+'</div>'
+      +'<span class="cond-name">'+c.label+(active?'':'<span style="font-size:10px;color:var(--txt3);margin-left:6px">(off)</span>')+'</span></div>'
+      +'<span class="cond-val">'+c.val+'</span></div>';
+  }).join('');
+
+  var srcCls = s.source || 'yahoo';
+  return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
+    +'<div class="d-hero">'
+      +'<div class="d-sym">'+s.symbol+'</div>'
+      +'<div class="d-sector-lbl">'+secLabel+' · NSE</div>'
+      +'<div class="d-price">₹'+fmt(s.close)+'</div>'
+      +'<div class="d-chg '+(s.chg>=0?'pos':'neg')+'">'+fmtPct(s.chg)+' today</div>'
+      +'<div class="verdict '+s.signal+'">'+vTxt+' — '+s.passCount+'/'+(s.totalActive||5)+'</div>'
+      +'<div class="src-badge '+srcCls+'">Data: '+srcLabel(srcCls)+'</div>'
+    +'</div>'
+    +'<div class="cond-box"><div class="cond-box-title">Strategy conditions</div>'+condRows+'</div>'
+    +(s.signal==='buy'&&s.sma50?'<div class="sl-note"><strong>Stop loss:</strong> ₹'+s.stopLoss+' (8% from entry) or close below SMA50 ₹'+fmt(s.sma50)+'</div>':'')
+    +'<div style="height:20px"></div>';
+}
+
+// ── Render: Setup ──────────────────────────────────────
+function renderSetup(){
+  var st = S.strategy;
+  var activeCount=[st.trendConfirmed,st.priceAlignment,st.volCondition,st.rsiCondition,st.nearHigh].filter(Boolean).length;
+
+  // Source chain status
+  var chainRows = [
+    {
+      num:'1', name:'Zerodha Kite', src:'kite',
+      desc:'Full historical candles · TOTP auto-login',
+      ok: S.sources.kite.connected,
+      lbl: S.sources.kite.connected ? 'Connected'+(S.sources.kite.userName?' as '+S.sources.kite.userName:'') : (S.sources.kite.error||'Not connected')
+    },
+    {
+      num:'2', name:'Angel One SmartAPI', src:'angel',
+      desc:'Historical candles · API key required',
+      ok: S.sources.angel.connected,
+      lbl: S.sources.angel.connected ? 'Connected' : (S.sources.angel.error||'Not configured')
+    },
+    {
+      num:'3', name:'Yahoo Finance', src:'yahoo',
+      desc:'Free fallback · No auth needed · .NS suffix',
+      ok: true,
+      lbl: 'Always available'
+    }
+  ].map(function(c){
+    var stCls = c.ok ? 'ok' : (c.src==='yahoo'?'ok':'warn');
+    var stLbl = c.ok ? (c.src==='yahoo'?'Fallback':'✓ Active') : '⚠ Fallback';
+    return '<div class="chain-row">'
+      +'<div class="chain-num">'+c.num+'</div>'
+      +'<div class="chain-info"><div class="chain-name">'+c.name+'</div><div class="chain-desc">'+c.lbl+'</div></div>'
+      +'<div class="chain-status '+stCls+'">'+stLbl+'</div>'
+      +'</div>';
+  }).join('');
+
+  // Strategy toggles
+  var conds=[
+    {key:'trendConfirmed',label:'Trend', desc:'SMA50 > SMA200'},
+    {key:'priceAlignment',label:'Price', desc:'Close > SMA50 & SMA200'},
+    {key:'volCondition',  label:'Volume',desc:'> 1.5× 10-day avg'},
+    {key:'rsiCondition',  label:'RSI(14)',desc:'> 55'},
+    {key:'nearHigh',      label:'52W High',desc:'Within 10% of high'},
+  ];
+  var toggleRows = conds.map(function(c){
+    var on=st[c.key];
+    return '<div class="toggle-row">'
+      +'<div class="toggle-info">'
+        +'<div class="toggle-label" style="opacity:'+(on?1:.45)+'">'+c.label+'</div>'
+        +'<div class="toggle-desc" style="opacity:'+(on?1:.35)+'">'+c.desc+'</div>'
+      +'</div>'
+      +'<div class="toggle '+(on?'on':'')+'" onclick="toggleCond(\''+c.key+'\')">'
+        +'<div class="toggle-knob"></div></div>'
+      +'</div>';
+  }).join('');
+
+  return '<div class="setup-wrap">'
+
+    // ── Source chain ──
+    +'<div class="setup-card">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+        +'<h3 style="margin:0">Data Sources</h3>'
+        +'<span style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace;">Kite → Angel → Yahoo</span>'
+      +'</div>'
+      +chainRows
+      +'<button class="full-btn" style="margin-top:14px;margin-bottom:0" onclick="setConn(\'loading\');initKite()">↺ Refresh connections</button>'
+    +'</div>'
+
+    // ── Angel One config ──
+    +'<div class="setup-card">'
+      +'<h3>Angel One SmartAPI</h3>'
+      +'<div style="font-size:11px;color:var(--txt3);margin-bottom:14px;line-height:1.6;">Configure your Angel One API key and Client ID. TOTP secret must be set as <span style="color:var(--accent);font-family:DM Mono,monospace">ANGEL_TOTP_SECRET</span> + password as <span style="color:var(--accent);font-family:DM Mono,monospace">ANGEL_PASSWORD</span> in Vercel env vars.</div>'
+      +'<div class="field-row">'
+        +'<label class="field-label">API Key</label>'
+        +'<input class="field-input" id="angelApiKey" type="password" placeholder="API key from smartapi.angelone.in" value="'+escHtml(S.angelCreds.apiKey)+'">'
+      +'</div>'
+      +'<div class="field-row">'
+        +'<label class="field-label">Client ID</label>'
+        +'<input class="field-input" id="angelClientId" type="text" placeholder="Your Angel One client ID" value="'+escHtml(S.angelCreds.clientId)+'">'
+      +'</div>'
+      +'<button class="full-btn primary" onclick="saveAngelCreds()" style="margin-bottom:0">Save & Connect</button>'
+    +'</div>'
+
+    // ── Kite status ──
+    +'<div class="setup-card">'
+      +'<h3>Zerodha Kite</h3>'
+      +(S.sources.kite.connected
+        ? '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:14px;">'
+          +'<div style="width:10px;height:10px;border-radius:50%;background:var(--green)"></div>'
+          +'<span style="font-size:13px;color:var(--green)">Connected'+(S.sources.kite.userName?' as '+S.sources.kite.userName:'')+'</span></div>'
+        : '<div style="font-size:13px;color:var(--amber);background:var(--amber-dim);padding:10px 14px;border-radius:var(--r);margin-bottom:14px;">'+
+          (S.sources.kite.error||'Not connected')+' — using fallback</div>')
+      +'<button class="full-btn" onclick="fetchKiteToken()" style="margin-bottom:0">↺ Refresh Kite token</button>'
+    +'</div>'
+
+    // ── Strategy toggles ──
+    +'<div class="setup-card">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+        +'<h3 style="margin:0">Strategy conditions</h3>'
+        +'<span style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace;">'+activeCount+'/5 active</span>'
+      +'</div>'
+      +toggleRows
+      +'<div style="margin-top:14px;padding:10px 12px;background:var(--bg3);border-radius:var(--r);font-size:11px;color:var(--txt3);line-height:1.6;">'
+        +'Buy = all <b style="color:var(--txt2)">active</b> conditions pass. Disabled = ignored in scoring.'
+      +'</div>'
+    +'</div>'
+
+  +'</div>';
+}
+
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+// ── Main render ────────────────────────────────────────
+function render(){
+  var el=document.getElementById('content');
+  if(S.tab==='setup'){  el.innerHTML=renderSetup();  return; }
+  if(S.detail){         el.innerHTML=renderDetail(); return; }
+  el.innerHTML=renderScanner();
+}
+
+// ── Boot ───────────────────────────────────────────────
+render();
+initKite(); // kicks off Kite → Angel → ready
+</script>
+</body>
+</html>
