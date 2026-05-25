@@ -132,8 +132,6 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .chain-status{font-size:10px;font-weight:700;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:10px;}
 .chain-status.ok{background:var(--green-dim);color:var(--green);}
 .chain-status.warn{background:var(--amber-dim);color:var(--amber);}
-.cls-chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:0.5px solid var(--border2);background:var(--bg3);color:var(--txt2);-webkit-tap-highlight-color:transparent;}
-.cls-chip.active{border-color:var(--accent);background:rgba(61,255,160,.1);color:var(--accent);}
 .spinner-wrap{display:flex;flex-direction:column;align-items:center;padding:60px 20px;gap:14px;}
 .spinner{width:24px;height:24px;border:2px solid var(--bg4);border-top-color:var(--accent);border-radius:50%;animation:spin .65s linear infinite;}
 .spinner.sm{width:13px;height:13px;border-width:2px;margin:0;}
@@ -200,7 +198,7 @@ var S = {
   // Filter tab state
   filter: {
     minScore: 0,
-    classification: 'all'  // all | elite | strong | emerging
+    cls: { elite: true, strong: true, emerging: true, weak: true }
   }
 };
 
@@ -681,11 +679,11 @@ function renderScanner(){
 
   // Apply filters
   var minScore = S.filter.minScore;
-  var clsFilter = S.filter.classification;
+  var clsSel = S.filter.cls;
   var filtered = scanned.filter(function(sym){
     var r = S.results[sym];
     if (r.score < minScore) return false;
-    if (clsFilter !== 'all' && r.classification !== clsFilter) return false;
+    if (!clsSel[r.classification]) return false;
     return true;
   });
 
@@ -875,15 +873,59 @@ function renderDetail(){
 function renderFilter(){
   var regime=marketRegime();
   var allScanned=Object.keys(S.results).filter(function(s){return s!=='NIFTY50'&&S.results[s];});
-  var elite=allScanned.filter(function(s){return S.results[s].classification==='elite';}).length;
-  var strong=allScanned.filter(function(s){return S.results[s].classification==='strong';}).length;
-  var emerging=allScanned.filter(function(s){return S.results[s].classification==='emerging';}).length;
+  var counts={
+    elite:   allScanned.filter(function(s){return S.results[s].classification==='elite';}).length,
+    strong:  allScanned.filter(function(s){return S.results[s].classification==='strong';}).length,
+    emerging:allScanned.filter(function(s){return S.results[s].classification==='emerging';}).length,
+    weak:    allScanned.filter(function(s){return S.results[s].classification==='weak';}).length
+  };
+  var cls=S.filter.cls;
+  var sc=S.filter.minScore;
 
-  var clsChips=['all','elite','strong','emerging'].map(function(c){
-    var labels={all:'All',elite:'Elite 90+',strong:'Strong 80+',emerging:'Emerging 70+'};
-    var active=S.filter.classification===c;
-    return '<div class="cls-chip'+(active?' active':'')+'" onclick="S.filter.classification=\''+c+'\';render()">'+labels[c]+'</div>';
-  }).join('');
+  // Score zone bar — coloured segments behind the slider
+  // zones: 0-69 weak(gray), 70-79 emerging(blue), 80-89 strong(amber), 90-120 elite(green)
+  // widths as % of 0-120 range
+  var zoneBar=
+    '<div style="position:relative;height:6px;border-radius:3px;overflow:hidden;margin:8px 0 2px;display:flex">'
+      +'<div style="flex:70;background:var(--txt3);opacity:0.35"></div>'    // 0-69 weak
+      +'<div style="flex:10;background:var(--blue);opacity:0.5"></div>'     // 70-79
+      +'<div style="flex:10;background:var(--amber);opacity:0.5"></div>'    // 80-89
+      +'<div style="flex:30;background:var(--green);opacity:0.6"></div>'    // 90-120
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt3);font-family:DM Mono,monospace;margin-bottom:6px">'
+      +'<span>0</span>'
+      +'<span style="position:relative;left:-4px;color:var(--blue)">70</span>'
+      +'<span style="position:relative;left:-2px;color:var(--amber)">80</span>'
+      +'<span style="position:relative;left:0px;color:var(--green)">90</span>'
+      +'<span>120</span>'
+    +'</div>';
+
+  // Helper for a single checkbox row
+  function cbRow(key,label,range,color,dim){
+    var checked=cls[key];
+    var cnt=counts[key];
+    return '<label style="display:flex;align-items:center;gap:12px;padding:11px 0;cursor:pointer;'
+      +(key!=='weak'?'border-bottom:1px solid var(--border)':'')+'">'
+      +'<div style="position:relative;width:22px;height:22px;flex-shrink:0">'
+        +'<input type="checkbox"'+(checked?' checked':'')+' '
+          +'onchange="S.filter.cls.'+key+'=this.checked;render()" '
+          +'style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0">'
+        +'<div style="width:22px;height:22px;border-radius:6px;border:2px solid '+(checked?color:'var(--border)')+';'
+          +'background:'+(checked?dim:'transparent')+';'
+          +'display:flex;align-items:center;justify-content:center;transition:all .15s;pointer-events:none">'
+          +(checked?'<svg width="12" height="9" viewBox="0 0 12 9" fill="none"><path d="M1 4L4.5 7.5L11 1" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')
+        +'</div>'
+      +'</div>'
+      +'<div style="flex:1">'
+        +'<div style="font-size:14px;font-weight:600;color:'+(checked?'var(--txt)':'var(--txt3)')+'">'+label+'</div>'
+        +'<div style="font-size:11px;color:var(--txt3);margin-top:1px">Score '+range+'</div>'
+      +'</div>'
+      +'<div style="min-width:36px;text-align:right">'
+        +'<span style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:'+(cnt>0&&checked?color:'var(--txt3)')+'">'+cnt+'</span>'
+        +'<div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em">stocks</div>'
+      +'</div>'
+    +'</label>';
+  }
 
   return '<div class="setup-wrap">'
 
@@ -903,31 +945,37 @@ function renderFilter(){
         :'<div style="font-size:12px;color:var(--txt3)">Scan stocks to load Nifty data</div>')
     +'</div>'
 
-    // Minimum score
+    // Minimum score slider with zone guidance
     +'<div class="setup-card">'
-      +'<h3>Minimum Score &nbsp;<span style="color:var(--accent);font-family:DM Mono,monospace">'+S.filter.minScore+'</span></h3>'
-      +'<input type="range" min="0" max="110" step="5" value="'+S.filter.minScore+'" '
+      +'<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">'
+        +'<h3 style="margin:0">Minimum Score</h3>'
+        +'<span style="font-size:20px;font-weight:700;font-family:DM Mono,monospace;color:'
+          +(sc>=90?'var(--green)':sc>=80?'var(--amber)':sc>=70?'var(--blue)':'var(--txt)')+'">'
+          +sc
+        +'</span>'
+      +'</div>'
+      +zoneBar
+      +'<input type="range" min="0" max="120" step="5" value="'+sc+'" '
         +'oninput="S.filter.minScore=+this.value;render()" '
-        +'style="width:100%;accent-color:var(--accent);margin:10px 0 4px">'
-      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--txt3);font-family:DM Mono,monospace">'
-        +'<span>0</span><span>70 Emrg</span><span>80 Str</span><span>90 Elite</span><span>110</span>'
+        +'style="width:100%;accent-color:'
+          +(sc>=90?'var(--green)':sc>=80?'var(--amber)':sc>=70?'var(--blue)':'var(--accent)')+';margin:0">'
+      +'<div style="font-size:11px;color:var(--txt3);margin-top:8px">'
+        +(sc===0?'Showing all scores — drag right to raise the bar'
+          :sc>=90?'Elite zone — only the highest conviction setups'
+          :sc>=80?'Strong zone — well-positioned, confirmed momentum'
+          :sc>=70?'Emerging zone — early movers, watch closely'
+          :'Below 70 — unconfirmed setups included')
       +'</div>'
     +'</div>'
 
-    // Classification filter
+    // Classification checkboxes
     +'<div class="setup-card">'
-      +'<h3>Classification</h3>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'+clsChips+'</div>'
-    +'</div>'
-
-    // Watchlist summary
-    +'<div class="setup-card">'
-      +'<h3>Watchlist Summary</h3>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">'
-        +'<div style="background:var(--green-dim);border-radius:8px;padding:14px 8px"><div style="font-size:24px;font-weight:700;font-family:DM Mono,monospace;color:var(--green)">'+elite+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;margin-top:3px">Elite</div></div>'
-        +'<div style="background:var(--amber-dim);border-radius:8px;padding:14px 8px"><div style="font-size:24px;font-weight:700;font-family:DM Mono,monospace;color:var(--amber)">'+strong+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;margin-top:3px">Strong</div></div>'
-        +'<div style="background:var(--blue-dim);border-radius:8px;padding:14px 8px"><div style="font-size:24px;font-weight:700;font-family:DM Mono,monospace;color:var(--blue)">'+emerging+'</div><div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;margin-top:3px">Emerging</div></div>'
-      +'</div>'
+      +'<h3>Classifications</h3>'
+      +'<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Tick the tiers you want to see in Scanner</div>'
+      +cbRow('elite',  'Elite',   '90 – 120','var(--green)', 'var(--green-dim)')
+      +cbRow('strong', 'Strong',  '80 – 89', 'var(--amber)', 'var(--amber-dim)')
+      +cbRow('emerging','Emerging','70 – 79', 'var(--blue)',  'var(--blue-dim)')
+      +cbRow('weak',   'Weak',    '< 70',    'var(--txt3)',  'rgba(255,255,255,.04)')
     +'</div>'
 
     // Scoring legend
