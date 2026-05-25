@@ -390,31 +390,33 @@ function yahooHistory(sym) {
     });
 }
 
-// ── Fallback chain ─────────────────────────────────────
-function fetchCandlesWithFallback(sym, sector) {
-  var priority = sourcePriority();
-  var fetchFns = {
-    kite:  function(){ return kiteHistory(sym); },
-    angel: function(){ return angelHistory(sym); },
-    yahoo: function(){ return yahooHistory(sym); }
-  };
+// ── Shared candle cache via /api/candles ───────────────
+// The server checks MongoDB first; on a miss it fetches Angel → Yahoo
+// and stores the result for all subsequent users that day.
+// Pass force=true to bypass the cache (used by the Refresh button).
+function fetchCandlesWithFallback(sym, sector, force) {
+  var range = getDateRange();
+  var url = '/api/candles?symbol=' + encodeURIComponent(sym)
+    + '&from=' + range.from + '&to=' + range.to
+    + (force ? '&force=1' : '');
 
-  // Sequential fallback: try each source; if it fails, move to next
-  function tryNext(idx) {
-    if (idx >= priority.length) return Promise.reject(new Error('All sources failed for ' + sym));
-    var src = priority[idx];
-    return fetchFns[src]()
-      .then(function(candles){ return { candles:candles, source:src }; })
-      .catch(function(err){
-        console.warn(sym + ' failed on ' + src + ':', err.message, '— trying next source');
-        return tryNext(idx + 1);
-      });
-  }
-
-  // For Kite we need instrument tokens preloaded
-  var prep = (priority[0] === 'kite') ? getInstrumentTokens([sym]).catch(function(){}) : Promise.resolve();
-
-  return prep.then(function(){ return tryNext(0); });
+  return fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (data.ok) return { candles: data.candles, source: data.source };
+      throw new Error(data.error || 'candles error');
+    })
+    .catch(function(err){
+      // If the shared endpoint fails and the user has a Kite session,
+      // fall back to their per-user Kite token for real-time data.
+      console.warn('/api/candles failed for', sym, '—', err.message,
+        S.sources.kite.connected ? '— trying Kite' : '');
+      if (!S.sources.kite.connected)
+        return Promise.reject(new Error('All sources failed for ' + sym));
+      return getInstrumentTokens([sym]).catch(function(){})
+        .then(function(){ return kiteHistory(sym); })
+        .then(function(candles){ return { candles: candles, source: 'kite' }; });
+    });
 }
 
 // ── Strategy calculations ──────────────────────────────
@@ -480,19 +482,19 @@ function getDateRange() {
   return { from:from.toISOString().split('T')[0], to:to.toISOString().split('T')[0] };
 }
 
-function scanSymbol(sym, sector) {
-  return fetchCandlesWithFallback(sym, sector)
+function scanSymbol(sym, sector, force) {
+  return fetchCandlesWithFallback(sym, sector, force)
     .then(function(result){
       S.results[sym] = applyStrategy(result.candles, sym, sector, result.source);
     })
     .catch(function(e){ console.warn('scanSymbol failed for', sym, e.message); });
 }
 
-function liveScanSector(sec) {
+function liveScanSector(sec, force) {
   var syms = userSyms[sec];
   return syms.reduce(function(chain, sym){
     return chain.then(function(){
-      return scanSymbol(sym, sec).catch(function(){});
+      return scanSymbol(sym, sec, force).catch(function(){});
     });
   }, Promise.resolve());
 }
@@ -500,22 +502,22 @@ function liveScanSector(sec) {
 function autoScanSector(sec) {
   var syms = userSyms[sec];
   var scanned = syms.filter(function(s){ return !!S.results[s]; });
-  if (!scanned.length && !S.scanning) triggerScan(sec);
+  if (!scanned.length && !S.scanning) triggerScan(sec, false);
 }
 
-function triggerScan(sec) {
+function triggerScan(sec, force) {
   S.scanning=true; render();
-  liveScanSector(sec)
+  liveScanSector(sec, force)
     .catch(function(e){ showToast('Scan error: '+e.message); })
     .then(function(){ S.scanning=false; render(); });
 }
 
-function scanAll() {
+function scanAll(force) {
   S.scanning=true; render();
   var secs=Object.keys(SECTORS).filter(function(k){return k!=='ALL';});
   var chain=Promise.resolve();
   secs.forEach(function(sec){
-    chain=chain.then(function(){ return liveScanSector(sec).catch(function(){}); });
+    chain=chain.then(function(){ return liveScanSector(sec, force).catch(function(){}); });
   });
   chain.then(function(){ S.scanning=false; render(); });
 }
@@ -623,8 +625,8 @@ function renderScanner(){
   var scanBtn = S.scanning
     ? '<button class="scan-btn" disabled><div class="spinner sm"></div> Scanning…</button>'
     : (sec==='ALL'
-      ? '<button class="scan-btn" onclick="scanAll()">↺ Refresh All</button>'
-      : '<button class="scan-btn" onclick="triggerScan(\''+sec+'\')">↺ Refresh</button>');
+      ? '<button class="scan-btn" onclick="scanAll(true)">↺ Refresh All</button>'
+      : '<button class="scan-btn" onclick="triggerScan(\''+sec+'\',true)">↺ Refresh</button>');
 
   var scanBar = '<div class="scan-bar"><div class="scan-info">'
     +(scanned.length?'<b>'+scanned.length+'</b>/<b>'+syms.length+'</b> scanned':'<b>'+syms.length+'</b> ready')
