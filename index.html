@@ -208,6 +208,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
       <button class="sb-btn active" id="sb-scanner" onclick="switchTab('scanner')">
         <span class="sb-icon">◈</span> Scanner
       </button>
+      <button class="sb-btn" id="sb-analyze" onclick="switchTab('analyze')">
+        <span class="sb-icon">⌕</span> Analyze
+      </button>
       <button class="sb-btn" id="sb-filter" onclick="switchTab('filter')">
         <span class="sb-icon">⊟</span> Filter
       </button>
@@ -242,6 +245,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
   <button class="bnav active" id="bnav-scanner" onclick="switchTab('scanner')">
     <div class="bnav-icon">◈</div><div class="bnav-lbl">Scanner</div>
   </button>
+  <button class="bnav" id="bnav-analyze" onclick="switchTab('analyze')">
+    <div class="bnav-icon">⌕</div><div class="bnav-lbl">Analyze</div>
+  </button>
   <button class="bnav" id="bnav-filter" onclick="switchTab('filter')">
     <div class="bnav-icon">⊟</div><div class="bnav-lbl">Filter</div>
   </button>
@@ -268,6 +274,9 @@ var S = {
   },
 
   results:{}, modal:false,
+
+  // Analyze tab state
+  analyze: { query:'', result:null, loading:false, error:null },
 
   // Filter tab state
   filter: {
@@ -1046,29 +1055,27 @@ function renderChart(raw) {
     +'</svg></div>';
 }
 
-// ── Render: Detail ─────────────────────────────────────
-function renderDetail(){
-  var s=S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
-  var secLabel=SECTORS[s.sector]?SECTORS[s.sector].label:(s.sector||'Index');
-  var regime=marketRegime();
+// ── Shared: build score rows + metrics for any result ──
+function buildStockBody(s) {
+  var regime = marketRegime();
+  var secLabel = SECTORS[s.sector] ? SECTORS[s.sector].label : (s.sector||'NSE');
 
-  var scoreRows=[
-    {label:'SMA50 > SMA200',          pts:20, earned:s.trendOk?20:0,              val:s.sma50&&s.sma200?'₹'+fmt(s.sma50)+' / ₹'+fmt(s.sma200):'—'},
-    {label:'Close > SMA50',           pts:10, earned:s.price50Ok?10:0,            val:s.sma50?'₹'+fmt(s.sma50):'—'},
-    {label:'Close > SMA200',          pts:10, earned:s.price200Ok?10:0,           val:s.sma200?'₹'+fmt(s.sma200):'—'},
-    {label:'RSI(14) 55–75',           pts:10, earned:s.rsiOk?10:0,               val:s.rsiVal?'RSI '+Number(s.rsiVal).toFixed(1):'—'},
-    {label:'ADX(14) > 25',            pts:15, earned:s.adxPts||0,                val:s.adxVal?'ADX '+Number(s.adxVal).toFixed(1):'—'},
-    {label:'Rel Strength > 0%',       pts:10, earned:s.rs&&s.rs>0?10:0,          val:s.rs!==null&&s.rs!==undefined?(s.rs>=0?'+':'')+Number(s.rs).toFixed(1)+'%':'—'},
-    {label:'Rel Strength > 15% bonus',pts:5,  earned:s.rs&&s.rs>15?5:0,          val:''},
-    {label:'Volume > 1.5× avg (20d)', pts:10, earned:s.volMultiple&&+s.volMultiple>=1.5?10:0, val:s.volMultiple?s.volMultiple+'×':'—'},
-    {label:'Volume > 2× bonus',       pts:5,  earned:s.volMultiple&&+s.volMultiple>=2?5:0,    val:''},
-    {label:'Within 5% of 52W high',   pts:10, earned:s.hi52pct&&+s.hi52pct>=95?10:0,         val:s.hi52pct?s.hi52pct+'%':'—'},
-    {label:'At 52W high bonus',       pts:5,  earned:s.hi52pct&&+s.hi52pct>=100?5:0,          val:''},
-    {label:'Volatility contraction',  pts:5,  earned:s.volContr?5:0,             val:s.vol20&&s.vol50?Number(s.vol20).toFixed(1)+'% / '+Number(s.vol50).toFixed(1)+'%':'—'},
+  var scoreRows = [
+    {label:'SMA50 > SMA200',           pts:20, earned:s.trendOk?20:0,                       val:s.sma50&&s.sma200?'₹'+fmt(s.sma50)+' / ₹'+fmt(s.sma200):'—'},
+    {label:'Close > SMA50',            pts:10, earned:s.price50Ok?10:0,                      val:s.sma50?'₹'+fmt(s.sma50):'—'},
+    {label:'Close > SMA200',           pts:10, earned:s.price200Ok?10:0,                     val:s.sma200?'₹'+fmt(s.sma200):'—'},
+    {label:'RSI(14) 55–75',            pts:10, earned:s.rsiOk?10:0,                          val:s.rsiVal?'RSI '+Number(s.rsiVal).toFixed(1):'—'},
+    {label:'ADX(14) > 25',             pts:15, earned:s.adxPts||0,                           val:s.adxVal?'ADX '+Number(s.adxVal).toFixed(1):'—'},
+    {label:'Rel Strength > 0%',        pts:10, earned:s.rs&&s.rs>0?10:0,                     val:s.rs!=null?(s.rs>=0?'+':'')+Number(s.rs).toFixed(1)+'%':'—'},
+    {label:'Rel Strength > 15% bonus', pts:5,  earned:s.rs&&s.rs>15?5:0,                     val:''},
+    {label:'Volume > 1.5× avg (20d)',  pts:10, earned:s.volMultiple&&+s.volMultiple>=1.5?10:0,val:s.volMultiple?s.volMultiple+'×':'—'},
+    {label:'Volume > 2× bonus',        pts:5,  earned:s.volMultiple&&+s.volMultiple>=2?5:0,   val:''},
+    {label:'Within 5% of 52W high',    pts:10, earned:s.hi52pct&&+s.hi52pct>=95?10:0,         val:s.hi52pct?s.hi52pct+'%':'—'},
+    {label:'At 52W high bonus',        pts:5,  earned:s.hi52pct&&+s.hi52pct>=100?5:0,         val:''},
+    {label:'Volatility contraction',   pts:5,  earned:s.volContr?5:0,                         val:s.vol20&&s.vol50?Number(s.vol20).toFixed(1)+'% / '+Number(s.vol50).toFixed(1)+'%':'—'},
   ];
-
-  var scoreRowsHtml=scoreRows.map(function(r){
-    var pass=r.earned>0;
+  var scoreRowsHtml = scoreRows.map(function(r){
+    var pass = r.earned > 0;
     return '<div class="cond-row">'
       +'<div class="cond-left"><div class="cond-check '+(pass?'pass':'fail')+'">'+(pass?'✓':'✗')+'</div>'
       +'<span class="cond-name">'+r.label+'</span></div>'
@@ -1078,19 +1085,19 @@ function renderDetail(){
       +'</div></div>';
   }).join('');
 
-  var metrics=[
-    {l:'RSI(14)',    v:s.rsiVal?Number(s.rsiVal).toFixed(1):'—'},
-    {l:'ADX(14)',    v:s.adxVal?Number(s.adxVal).toFixed(1):'—'},
-    {l:'ATR(14)',    v:s.atrVal?'₹'+Number(s.atrVal).toFixed(2):'—'},
-    {l:'Vol / Avg',  v:s.volMultiple?s.volMultiple+'×':'—'},
-    {l:'52W High %', v:s.hi52pct?s.hi52pct+'%':'—'},
-    {l:'Rel Strength',v:s.rs!==null&&s.rs!==undefined?(s.rs>=0?'+':'')+Number(s.rs).toFixed(1)+'%':'—'},
-    {l:'6M Return',  v:s.stock6M!==null&&s.stock6M!==undefined?(s.stock6M>=0?'+':'')+Number(s.stock6M).toFixed(1)+'%':'—'},
-    {l:'MQ Score',   v:s.mqs},
+  var metrics = [
+    {l:'RSI(14)',      v:s.rsiVal?Number(s.rsiVal).toFixed(1):'—'},
+    {l:'ADX(14)',      v:s.adxVal?Number(s.adxVal).toFixed(1):'—'},
+    {l:'ATR(14)',      v:s.atrVal?'₹'+Number(s.atrVal).toFixed(2):'—'},
+    {l:'Vol / Avg',    v:s.volMultiple?s.volMultiple+'×':'—'},
+    {l:'52W High %',   v:s.hi52pct?s.hi52pct+'%':'—'},
+    {l:'Rel Strength', v:s.rs!=null?(s.rs>=0?'+':'')+Number(s.rs).toFixed(1)+'%':'—'},
+    {l:'6M Return',    v:s.stock6M!=null?(s.stock6M>=0?'+':'')+Number(s.stock6M).toFixed(1)+'%':'—'},
+    {l:'MQ Score',     v:s.mqs},
   ];
 
-  var srcCls=s.source||'yahoo';
-  var hero='<div class="d-hero">'
+  var srcCls = s.source||'yahoo';
+  var hero = '<div class="d-hero">'
     +'<div class="d-sym">'+s.symbol+'</div>'
     +'<div class="d-sector-lbl">'+secLabel+' · NSE</div>'
     +'<div class="d-price">₹'+fmt(s.close)+'</div>'
@@ -1105,22 +1112,155 @@ function renderDetail(){
     +'<div class="src-badge '+srcCls+'" style="margin-top:8px">Data: '+srcLabel(srcCls)+'</div>'
   +'</div>';
 
-  var metricsBox='<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Key Metrics</div>'
+  var metricsBox = '<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Key Metrics</div>'
     +'<div class="metric-grid">'+metrics.map(function(m){
       return '<div class="metric-cell"><div class="metric-lbl">'+m.l+'</div><div class="metric-val">'+m.v+'</div></div>';
     }).join('')+'</div></div>';
 
-  var breakdownBox='<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Score Breakdown — '+s.score+' / 120</div>'+scoreRowsHtml+'</div>';
-  var slBox=s.stopLoss?'<div class="sl-note" style="margin-top:14px"><strong>Stop Loss:</strong> ₹'+s.stopLoss+' (tighter of 10-day low or Entry − 2×ATR)</div>':'';
+  var breakdownBox = '<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Score Breakdown — '+s.score+' / 120</div>'+scoreRowsHtml+'</div>';
+  var slBox = s.stopLoss ? '<div class="sl-note" style="margin-top:14px"><strong>Stop Loss:</strong> ₹'+s.stopLoss+' (tighter of 10-day low or Entry − 2×ATR)</div>' : '';
 
-  // Chart (full width) then 2-col on desktop
-  var chart = renderChart(s._candles);
-  return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
-    +chart
-    +'<div class="detail-cols">'
-      +'<div class="detail-col">'+hero+metricsBox+slBox+'<div style="height:20px"></div></div>'
-      +'<div class="detail-col">'+breakdownBox+'<div style="height:20px"></div></div>'
+  return '<div class="detail-cols">'
+    +'<div class="detail-col">'+hero+metricsBox+slBox+'<div style="height:20px"></div></div>'
+    +'<div class="detail-col">'+breakdownBox+'<div style="height:20px"></div></div>'
     +'</div>';
+}
+
+// ── Render: Detail ─────────────────────────────────────
+function renderDetail(){
+  var s = S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
+  var secLabel = SECTORS[s.sector] ? SECTORS[s.sector].label : (s.sector||'Index');
+  return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
+    + renderChart(s._candles)
+    + buildStockBody(s);
+}
+
+// ── Render: Analyze ────────────────────────────────────
+function renderAnalyze(){
+  var q   = S.analyze.query;
+  var res = S.analyze.result;
+  var err = S.analyze.error;
+  var loading = S.analyze.loading;
+
+  // Build <datalist> from all known NSE symbols
+  var opts = '';
+  Object.keys(SECTORS).forEach(function(sec){
+    if (sec==='ALL') return;
+    SECTORS[sec].symbols.forEach(function(sym){
+      opts += '<option value="'+sym+'">'+sym+' · '+SECTORS[sec].label+'</option>';
+    });
+  });
+
+  var searchBar = '<div style="padding:14px 16px;border-bottom:0.5px solid var(--border);'
+    +'position:sticky;top:0;background:var(--bg);z-index:10">'
+    +'<datalist id="symList">'+opts+'</datalist>'
+    +'<div class="add-row">'
+      +'<input class="add-input" id="analyzeInput" list="symList" type="text" '
+        +'placeholder="NSE symbol — TCS, RELIANCE, HDFCBANK…" '
+        +'value="'+escHtml(q)+'" '
+        +'style="text-transform:uppercase;font-size:14px" '
+        +'autocomplete="off" autocorrect="off" spellcheck="false" '
+        +'oninput="S.analyze.query=this.value.toUpperCase().trim()" '
+        +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();startAnalyze();}">'
+      +'<button class="add-btn" onclick="startAnalyze()" '+(loading?'disabled':'')+' '
+        +'style="min-width:64px;font-size:13px">'+(loading?'…':'Analyze')+'</button>'
+    +'</div>'
+    +(res&&!loading?'<div style="font-size:10px;color:var(--txt3);margin-top:8px;font-family:DM Mono,monospace">'
+      +'Tap another symbol to re-analyze · data via '+srcLabel(res.source||'yahoo')+'</div>':'')
+  +'</div>';
+
+  var body = '';
+  if (loading) {
+    body = '<div class="spinner-wrap"><div class="spinner"></div>'
+      +'<div class="spin-txt">Fetching '+escHtml(q)+'…</div></div>';
+  } else if (err) {
+    body = '<div class="empty" style="padding:40px 24px">'
+      +'<div style="font-size:32px;margin-bottom:12px">⚠</div>'
+      +'<div style="color:var(--txt2);font-weight:600;margin-bottom:8px">'+escHtml(err)+'</div>'
+      +'<div style="font-size:12px;color:var(--txt3)">Check the symbol and try again. Use NSE format (e.g. TCS, HDFCBANK, M&amp;M).</div>'
+    +'</div>';
+  } else if (res) {
+    body = renderChart(res._candles) + buildStockBody(res);
+  } else {
+    // Empty state — quick-pick tiles
+    var picks = ['TCS','RELIANCE','HDFCBANK','INFY','TATAMOTORS','SUNPHARMA','ITC','ADANIGREEN','BAJFINANCE','LT','WIPRO','AXISBANK'];
+    body = '<div style="padding:20px 16px">'
+      +'<div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace;margin-bottom:12px">Quick picks</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">'
+      +picks.map(function(sym){
+        var r = S.results[sym];
+        var badge = r ? '<span style="margin-left:5px;font-size:10px;font-weight:700;color:'+CLS_COLOR[r.classification]+'">'+(r.score)+'</span>' : '';
+        return '<button onclick="startAnalyze(\''+sym+'\')" '
+          +'style="display:flex;align-items:center;padding:8px 14px;background:var(--bg3);border:0.5px solid var(--border2);'
+          +'border-radius:20px;color:var(--txt2);font-size:12px;font-family:DM Mono,monospace;cursor:pointer;gap:4px">'
+          +sym+badge+'</button>';
+      }).join('')
+      +'</div>'
+      +'<div style="background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rl);padding:18px">'
+        +'<div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:10px">How it works</div>'
+        +'<div style="font-size:12px;color:var(--txt3);line-height:1.9">'
+          +'Type <b style="color:var(--txt2)">any NSE symbol</b> and tap Analyze to instantly get the full 120-point momentum score, '
+          +'candlestick chart, key indicators and stop loss — for any stock not in your watchlist.<br><br>'
+          +'Already-scanned stocks load <b style="color:var(--txt2)">instantly</b> from cache. '
+          +'New symbols are fetched from Angel One or Yahoo Finance.'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }
+
+  return searchBar + body;
+}
+
+// ── Logic: fetch + score any symbol ───────────────────
+function startAnalyze(sym) {
+  var s = (sym || S.analyze.query || '').trim().toUpperCase();
+  if (!s) { showToast('Enter a symbol'); return; }
+
+  // Instant result if already scanned
+  if (S.results[s] && S.results[s]._candles) {
+    S.analyze.query  = s;
+    S.analyze.result = S.results[s];
+    S.analyze.error  = null;
+    S.analyze.loading= false;
+    render(); return;
+  }
+
+  S.analyze.query   = s;
+  S.analyze.loading = true;
+  S.analyze.error   = null;
+  S.analyze.result  = null;
+  render();
+
+  var range = getDateRange();
+  // Always include NIFTY50 so relative-strength can be computed
+  var url = '/api/scan?symbols='+encodeURIComponent('NIFTY50,'+s)
+    +'&from='+range.from+'&to='+range.to;
+
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!data.ok) throw new Error(data.error||'Scan failed');
+      // Seed NIFTY50 if we got it
+      var n50 = data.results['NIFTY50'];
+      if (n50 && n50.candles && n50.candles.length) {
+        var r50 = applyStrategy(n50.candles,'NIFTY50','INDEX',n50.source);
+        r50._candles = n50.candles;
+        S.results['NIFTY50'] = r50;
+      }
+      var sr = data.results[s];
+      if (!sr || sr.error) throw new Error((sr&&sr.error)||'Symbol not found: '+s);
+      if (!sr.candles||!sr.candles.length) throw new Error('No price data returned for '+s);
+      var res = applyStrategy(sr.candles, s, 'Custom', sr.source);
+      res._candles = sr.candles;
+      S.results[s] = res;
+      S.analyze.result  = res;
+      S.analyze.loading = false;
+    })
+    .catch(function(e){
+      S.analyze.loading = false;
+      S.analyze.error   = e.message;
+    })
+    .then(function(){ render(); });
 }
 
 // ── Render: Filter ─────────────────────────────────────
@@ -1306,6 +1446,7 @@ function render(){
   var el=document.getElementById('content');
   if(S.tab==='setup'){  el.innerHTML=renderSetup();  }
   else if(S.tab==='filter'){ el.innerHTML=renderFilter(); }
+  else if(S.tab==='analyze'){ el.innerHTML=renderAnalyze(); }
   else if(S.detail){    el.innerHTML=renderDetail(); }
   else { el.innerHTML=renderScanner(); }
   updateSbRegime();
