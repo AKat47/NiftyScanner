@@ -150,6 +150,20 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .bt-win{color:#4ade80;}
 .bt-loss{color:#f87171;}
 .bt-open{color:var(--accent);}
+.dp-header{padding:16px 16px 0;display:flex;align-items:flex-start;gap:12px;}
+.dp-badge{display:flex;flex-direction:column;align-items:center;justify-content:center;width:52px;height:52px;border-radius:12px;flex-shrink:0;}
+.dp-score{font-size:20px;font-weight:800;line-height:1;}
+.dp-cls{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+.dp-info{flex:1;min-width:0;}
+.dp-sym{font-size:20px;font-weight:800;color:var(--txt);letter-spacing:-.02em;}
+.dp-price{font-size:15px;font-weight:600;color:var(--txt);margin-top:1px;}
+.dp-meta{font-size:11px;color:var(--txt3);margin-top:3px;font-family:'DM Mono',monospace;}
+.dt-tabs{display:flex;border-bottom:0.5px solid var(--border);margin-top:14px;background:var(--bg);}
+.dt-tab{flex:1;padding:10px 4px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;color:var(--txt3);border-bottom:2px solid transparent;}
+.dt-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.bt-eq-wrap{margin:0;background:var(--bg2);border-bottom:0.5px solid var(--border);}
+.bt-period{padding:6px 14px 8px;font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;}
+.bt-empty{padding:40px 24px;text-align:center;color:var(--txt3);font-size:13px;}
 .src-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace;}
 .src-badge.kite{background:rgba(96,165,250,.12);color:#60a5fa;}
 .src-badge.angel{background:rgba(245,158,11,.12);color:#f59e0b;}
@@ -273,7 +287,7 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 <script>
 // ── State ──────────────────────────────────────────────
 var S = {
-  tab:'scanner', activeSector:'IT', detail:null,
+  tab:'scanner', activeSector:'IT', detail:null, detailTab:'backtest',
   scanning:false, authLoading:true,
 
   sources: {
@@ -930,7 +944,7 @@ function sigCard(s){
   var regime = marketRegime();
   var suppressed = !regime.bullish && (s.classification==='elite'||s.classification==='strong');
   var srcCls = s.source||'yahoo';
-  return '<div class="sig-card" onclick="S.detail=\''+s.symbol+'\';render()">'
+  return '<div class="sig-card" onclick="openDetail(\''+s.symbol+'\')">'
     +'<div class="score-badge" style="background:'+CLS_DIM[s.classification]+'">'
       +'<div class="score-num" style="color:'+CLS_COLOR[s.classification]+'">'+s.score+'</div>'
       +'<div class="score-tag" style="color:'+CLS_COLOR[s.classification]+'">'+CLS_LABEL[s.classification]+'</div>'
@@ -1284,61 +1298,120 @@ function renderBtEquity(bt) {
 }
 
 // Full backtest results section
-function renderBtSection(symbol) {
-  var bt=S.btResult&&S.btResult.symbol===symbol?S.btResult.data:null;
-  var btnLabel=bt?'↺ Re-run':'📈 Run Backtest';
-  var btn='<button class="bt-btn" onclick="triggerBt(\''+symbol+'\')">'+btnLabel+'</button>';
-  if(!bt)return btn;
-
-  var fp2=function(n){return (n>=0?'+':'')+n.toFixed(1)+'%';};
-  var dateStr=function(s){try{var d=new Date(s);return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});}catch(e){return s||'';}};
-
-  var stats='<div class="bt-stats">'
-    +'<div class="bt-stat"><div class="bt-stat-label">Total return</div><div class="bt-stat-val" style="color:'+(bt.totalRet>=0?'#4ade80':'#f87171')+'">'+fp2(bt.totalRet)+'</div></div>'
-    +'<div class="bt-stat"><div class="bt-stat-label">Buy & hold</div><div class="bt-stat-val" style="color:'+(bt.bhRet>=0?'#4ade80':'#f87171')+'">'+fp2(bt.bhRet)+'</div></div>'
-    +'<div class="bt-stat"><div class="bt-stat-label">Win rate</div><div class="bt-stat-val">'+bt.wr.toFixed(0)+'%</div></div>'
-    +'<div class="bt-stat"><div class="bt-stat-label">Avg win</div><div class="bt-stat-val" style="color:#4ade80">'+fp2(bt.avgW)+'</div></div>'
-    +'<div class="bt-stat"><div class="bt-stat-label">Avg loss</div><div class="bt-stat-val" style="color:#f87171">'+fp2(bt.avgL)+'</div></div>'
-    +'<div class="bt-stat"><div class="bt-stat-label">Max drawdown</div><div class="bt-stat-val" style="color:#f87171">-'+bt.mdd.toFixed(1)+'%</div></div>'
-    +'</div>';
-
-  var trades=bt.trades.map(function(t){
-    var cls=t.why==='Open'?'bt-open':t.win?'bt-win':'bt-loss';
-    return '<div class="bt-trade">'
-      +'<div><span style="color:var(--txt3)">In&nbsp;</span>'+dateStr(t.ed)+'<br><span style="color:var(--txt3)">Out </span>'+dateStr(t.xd)+'</div>'
-      +'<div>₹'+Math.round(t.ep)+' → ₹'+Math.round(t.xp)+'<br><span style="color:var(--txt3)">'+t.days+'d · '+t.why+'</span></div>'
-      +'<div class="'+cls+'" style="text-align:right;font-weight:700">'+(t.ret>=0?'+':'')+t.ret.toFixed(1)+'%</div>'
-      +'</div>';
-  }).join('');
-
-  var periodNote='<div style="padding:8px 14px;font-size:10px;color:var(--txt3);font-family:DM Mono,monospace;border-top:0.5px solid var(--border)">'
-    +'Backtest period: '+dateStr(bt.from)+' – '+dateStr(bt.to)+' · '+bt.n+' trade'+(bt.n===1?'':'s')+' · Entry ≥80 pts · Exit &lt;65 pts or stop'
-    +'</div>';
-
-  return btn+'<div class="bt-section">'
-    +'<div class="bt-header"><span class="bt-title">Backtest results — '+symbol+'</span></div>'
-    +renderBtEquity(bt)
-    +stats
-    +(bt.trades.length?'<div style="border-top:0.5px solid var(--border);padding:8px 14px;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">Trade log</div>'+trades:'')+periodNote
-    +'</div>';
-}
-
-function triggerBt(symbol) {
-  var data=runBacktest(symbol);
-  if(!data){showToast('Need more history — scan this stock first');return;}
-  S.btResult={symbol,data};
+// ── Open detail: navigate to stock page, auto-run backtest ─────────────────
+function openDetail(sym) {
+  S.detail = sym;
+  S.detailTab = 'backtest';
+  // Auto-run backtest immediately if we have candle data
+  if (S.results[sym] && S.results[sym]._candles) {
+    var data = runBacktest(sym);
+    if (data) S.btResult = { symbol: sym, data: data };
+  }
   render();
 }
 
-// ── Render: Detail ─────────────────────────────────────
+// ── Shared detail page header ───────────────────────────
+function renderDetailHeader(s) {
+  var secLabel = SECTORS[s.sector] ? SECTORS[s.sector].label : (s.sector||'Index');
+  var chgCol = s.chg >= 0 ? '#4ade80' : '#f87171';
+  return '<div class="back-row" onclick="S.detail=null;render()">← '+escHtml(secLabel)+'</div>'
+    +'<div class="dp-header">'
+      +'<div class="dp-badge" style="background:'+CLS_DIM[s.classification]+'">'
+        +'<div class="dp-score" style="color:'+CLS_COLOR[s.classification]+'">'+s.score+'</div>'
+        +'<div class="dp-cls" style="color:'+CLS_COLOR[s.classification]+'">'+CLS_LABEL[s.classification]+'</div>'
+      +'</div>'
+      +'<div class="dp-info">'
+        +'<div class="dp-sym">'+escHtml(s.symbol)+'</div>'
+        +'<div class="dp-price">₹'+fmt(s.close)
+          +' <span style="color:'+chgCol+';font-size:13px">'+fmtPct(s.chg)+'</span></div>'
+        +'<div class="dp-meta">RSI '+(s.rsiVal?Number(s.rsiVal).toFixed(0):'—')
+          +' · ADX '+(s.adxVal?Number(s.adxVal).toFixed(0):'—')
+          +' · '+srcLabel(s.source||'yahoo')+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="dt-tabs">'
+      +'<div class="dt-tab'+(S.detailTab==='backtest'?' active':'')+'" onclick="S.detailTab=\'backtest\';render()">📈 Backtest</div>'
+      +'<div class="dt-tab'+(S.detailTab==='overview'?' active':'')+'" onclick="S.detailTab=\'overview\';render()">◈ Overview</div>'
+    +'</div>';
+}
+
+// ── Render: Backtest sub-page ───────────────────────────
+function renderDetailBt(s) {
+  var bt = S.btResult && S.btResult.symbol === s.symbol ? S.btResult.data : null;
+  var fp2 = function(n){ return (n>=0?'+':'')+n.toFixed(1)+'%'; };
+  var dateStr = function(ds){ try{ var d=new Date(ds); return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}); }catch(e){ return ds||''; } };
+
+  if (!bt) {
+    return '<div class="bt-empty">'
+      +'<div style="font-size:28px;margin-bottom:10px">📊</div>'
+      +'<div style="color:var(--txt2);font-weight:600;margin-bottom:6px">No backtest data</div>'
+      +'<div style="font-size:12px">Scan this stock first so we have enough history</div>'
+      +'</div>';
+  }
+
+  // Equity curve
+  var eq = '<div class="bt-eq-wrap">'+renderBtEquity(bt)
+    +'<div class="bt-period">Period: '+dateStr(bt.from)+' – '+dateStr(bt.to)
+      +' · Entry ≥80 pts · Exit &lt;65 pts or stop</div>'
+    +'</div>';
+
+  // Stats grid
+  var stats = '<div class="bt-stats">'
+    +'<div class="bt-stat"><div class="bt-stat-label">Strategy return</div>'
+      +'<div class="bt-stat-val" style="color:'+(bt.totalRet>=0?'#4ade80':'#f87171')+'">'+fp2(bt.totalRet)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Buy &amp; hold</div>'
+      +'<div class="bt-stat-val" style="color:'+(bt.bhRet>=0?'#4ade80':'#f87171')+'">'+fp2(bt.bhRet)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Win rate</div>'
+      +'<div class="bt-stat-val">'+bt.wr.toFixed(0)+'%</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Avg win</div>'
+      +'<div class="bt-stat-val" style="color:#4ade80">'+fp2(bt.avgW)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Avg loss</div>'
+      +'<div class="bt-stat-val" style="color:#f87171">'+fp2(bt.avgL)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Max drawdown</div>'
+      +'<div class="bt-stat-val" style="color:#f87171">−'+bt.mdd.toFixed(1)+'%</div></div>'
+    +'</div>';
+
+  // Trade log
+  var tradeLog = '';
+  if (bt.trades.length) {
+    var rows = bt.trades.map(function(t){
+      var cls = t.why==='Open' ? 'bt-open' : t.win ? 'bt-win' : 'bt-loss';
+      var retStr = (t.ret>=0?'+':'')+t.ret.toFixed(1)+'%';
+      return '<div class="bt-trade">'
+        +'<div>'
+          +'<span style="color:var(--txt3)">In&nbsp; </span>'+dateStr(t.ed)+'<br>'
+          +'<span style="color:var(--txt3)">Out </span>'+dateStr(t.xd)
+        +'</div>'
+        +'<div>'
+          +'₹'+Math.round(t.ep)+' → ₹'+Math.round(t.xp)+'<br>'
+          +'<span style="color:var(--txt3)">'+t.days+'d · '+t.why+'</span>'
+        +'</div>'
+        +'<div class="'+cls+'" style="text-align:right;font-weight:700">'+retStr+'</div>'
+        +'</div>';
+    }).join('');
+    tradeLog = '<div style="border-top:0.5px solid var(--border)">'
+      +'<div style="padding:8px 14px;font-size:10px;font-weight:600;color:var(--txt3);'
+        +'text-transform:uppercase;letter-spacing:.07em;font-family:\'DM Mono\',monospace">'
+        +'Trade log · '+bt.n+' trade'+(bt.n===1?'':'s')+'</div>'
+      +rows+'</div>';
+  } else {
+    tradeLog = '<div class="bt-empty">No trades triggered in this period</div>';
+  }
+
+  return renderChart(s._candles, s.stopLoss) + eq + stats + tradeLog + '<div style="height:28px"></div>';
+}
+
+// ── Render: Overview sub-page ───────────────────────────
+function renderDetailOverview(s) {
+  return renderChart(s._candles, s.stopLoss) + buildStockBody(s) + '<div style="height:28px"></div>';
+}
+
+// ── Render: Detail (router) ─────────────────────────────
 function renderDetail(){
   var s = S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
-  var secLabel = SECTORS[s.sector] ? SECTORS[s.sector].label : (s.sector||'Index');
-  return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
-    + renderChart(s._candles, s.stopLoss)
-    + buildStockBody(s)
-    + renderBtSection(s.symbol)
-    + '<div style="height:24px"></div>';
+  var hdr = renderDetailHeader(s);
+  var body = S.detailTab === 'overview' ? renderDetailOverview(s) : renderDetailBt(s);
+  return hdr + body;
 }
 
 // ── Render: Analyze ────────────────────────────────────
@@ -1386,7 +1459,7 @@ function renderAnalyze(){
       +'<div style="font-size:12px;color:var(--txt3)">Check the symbol and try again. Use NSE format (e.g. TCS, HDFCBANK, M&amp;M).</div>'
     +'</div>';
   } else if (res) {
-    body = renderChart(res._candles, res.stopLoss) + buildStockBody(res) + renderBtSection(res.symbol) + '<div style="height:24px"></div>';
+    body = renderChart(res._candles, res.stopLoss) + buildStockBody(res) + '<div style="height:24px"></div>';
   } else {
     // Empty state — quick-pick tiles
     var picks = ['TCS','RELIANCE','HDFCBANK','INFY','TATAMOTORS','SUNPHARMA','ITC','ADANIGREEN','BAJFINANCE','LT','WIPRO','AXISBANK'];
