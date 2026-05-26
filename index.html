@@ -136,6 +136,20 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .metric-lbl{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;font-family:'DM Mono',monospace;}
 .metric-val{font-size:14px;font-weight:600;color:var(--txt);font-family:'DM Mono',monospace;margin-top:2px;}
 .sl-note{margin:12px 16px 0;background:var(--amber-dim);border:0.5px solid rgba(251,191,36,.15);border-radius:var(--r);padding:11px 14px;font-size:12px;color:var(--amber);line-height:1.6;}
+.bt-btn{margin:16px 16px 0;display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--r);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;width:calc(100% - 32px);justify-content:center;}
+.bt-btn:hover{background:var(--bg3);}
+.bt-section{margin:16px 16px 0;border-radius:var(--rl);border:0.5px solid var(--border);overflow:hidden;background:var(--bg2);}
+.bt-header{padding:12px 14px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.bt-title{font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:'DM Mono',monospace;}
+.bt-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5px;background:var(--border);}
+.bt-stat{background:var(--bg2);padding:10px 12px;}
+.bt-stat-label{font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;margin-bottom:3px;}
+.bt-stat-val{font-size:15px;font-weight:700;color:var(--txt);}
+.bt-trade{display:grid;grid-template-columns:1fr 1fr auto;gap:2px;padding:9px 14px;border-bottom:0.5px solid var(--border);font-size:11px;font-family:'DM Mono',monospace;}
+.bt-trade:last-child{border-bottom:none;}
+.bt-win{color:#4ade80;}
+.bt-loss{color:#f87171;}
+.bt-open{color:var(--accent);}
 .src-badge{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace;}
 .src-badge.kite{background:rgba(96,165,250,.12);color:#60a5fa;}
 .src-badge.angel{background:rgba(245,158,11,.12);color:#f59e0b;}
@@ -277,6 +291,9 @@ var S = {
 
   // Analyze tab state
   analyze: { query:'', result:null, loading:false, error:null },
+
+  // Backtest state
+  btResult: null, // { symbol, data } once run
 
   // Filter tab state
   filter: {
@@ -1141,13 +1158,187 @@ function buildStockBody(s) {
     +'</div>';
 }
 
+// ── Backtest engine ────────────────────────────────────
+// Simplified scoring that runs purely on a candle slice (no regime/RS deps)
+function btScore(slice) {
+  if (slice.length < 60) return 0;
+  var closes = slice.map(function(c){return +c[4]||0;});
+  var highs  = slice.map(function(c){return +c[2]||0;});
+  var lows   = slice.map(function(c){return +c[3]||0;});
+  var vols   = slice.map(function(c){return +c[5]||0;});
+  var n = closes.length, close = closes[n-1];
+  function sm(arr,p){if(arr.length<p)return null;var s=0;for(var i=arr.length-p;i<arr.length;i++)s+=arr[i];return s/p;}
+  var s50=sm(closes,50), s200=sm(closes,200);
+  // Trend (40 pts)
+  var tr=0;
+  if(s50 && close>s50)tr+=20; if(s200&&close>s200)tr+=15; if(s50&&s200&&s50>s200)tr+=5;
+  // RSI (10 pts)
+  var rsi=calcRSI(closes), rp=0;
+  if(rsi>=40&&rsi<=70)rp=10; else if(rsi>70&&rsi<=80)rp=5;
+  // ADX (15 pts)
+  var adx=calcADX(highs,lows,closes,14);
+  var ap=adx>=30?15:adx>=20?10:adx>=15?5:0;
+  // Volume (15 pts)
+  var av=sm(vols.slice(-21,-1),20), vp=5;
+  if(av&&vols[n-1]>av*1.5)vp=15; else if(av&&vols[n-1]>av*1.2)vp=10;
+  // 52W high proximity (15 pts)
+  var h52=Math.max.apply(null,closes.slice(Math.max(0,n-252)));
+  var hp=close/h52*100; var h52p=hp>=95?15:hp>=85?10:hp>=75?5:0;
+  // Volatility contraction (5 pts)
+  var vc=calcVolatility(closes,20)<calcVolatility(closes,50)*0.85?5:0;
+  return tr+rp+ap+vp+h52p+vc; // max 100
+}
+
+function btSL(slice) {
+  var closes=slice.map(function(c){return +c[4]||0;});
+  var highs =slice.map(function(c){return +c[2]||0;});
+  var lows  =slice.map(function(c){return +c[3]||0;});
+  var n=closes.length, close=closes[n-1];
+  var low10=Math.min.apply(null,lows.slice(-10));
+  var atr=calcATR(highs,lows,closes,14);
+  return atr?Math.max(low10,close-2*atr):low10;
+}
+
+function runBacktest(symbol) {
+  var raw=(S.results[symbol]||{})._candles;
+  if(!raw||raw.length<220) return null;
+  var WARMUP=200, ENTRY=80, EXIT=65;
+  var trades=[], eq=[{d:raw[WARMUP][0],v:100}];
+  var cur=100, inPos=false, pos=null;
+  var bhStart=+raw[WARMUP][4];
+
+  for(var i=WARMUP;i<raw.length-1;i++){
+    var sl=btSlice(raw,i);
+    var sc=btScore(sl), sl_=btSL(sl);
+    var closeI=+raw[i][4], nextO=+raw[i+1][1];
+    if(!inPos){
+      if(sc>=ENTRY){inPos=true;pos={d:raw[i+1][0],p:nextO,sl:sl_,i:i+1,sc:sc};}
+    } else {
+      if(sl_>pos.sl)pos.sl=sl_;
+      var stopHit=closeI<=pos.sl, sigExit=sc<EXIT;
+      if(stopHit||sigExit){
+        var xp=stopHit?Math.min(nextO,pos.sl):nextO;
+        var ret=(xp-pos.p)/pos.p*100;
+        cur*=(1+ret/100);
+        trades.push({ed:pos.d,ep:pos.p,xd:raw[i+1][0],xp:xp,ret:ret,days:i+1-pos.i,why:stopHit?'Stop':'Score',win:ret>0});
+        eq.push({d:raw[i+1][0],v:cur});
+        inPos=false;pos=null;
+      }
+    }
+  }
+  if(inPos){
+    var last=raw[raw.length-1], lc=+last[4];
+    var ret=(lc-pos.p)/pos.p*100; cur*=(1+ret/100);
+    trades.push({ed:pos.d,ep:pos.p,xd:last[0],xp:lc,ret:ret,days:raw.length-1-pos.i,why:'Open',win:ret>0});
+    eq.push({d:last[0],v:cur});
+  }
+  if(eq.length<2)eq.push({d:raw[raw.length-1][0],v:100});
+
+  var closed=trades.filter(function(t){return t.why!=='Open';});
+  var wins=closed.filter(function(t){return t.win;});
+  var loss=closed.filter(function(t){return !t.win;});
+  var avgW=wins.length?wins.reduce(function(a,t){return a+t.ret;},0)/wins.length:0;
+  var avgL=loss.length?loss.reduce(function(a,t){return a+t.ret;},0)/loss.length:0;
+  var peak=100,mdd=0;
+  eq.forEach(function(e){if(e.v>peak)peak=e.v;var dd=(peak-e.v)/peak*100;if(dd>mdd)mdd=dd;});
+  var bhRet=(+raw[raw.length-1][4]-bhStart)/bhStart*100;
+  return {trades,eq,totalRet:cur-100,bhRet,wr:closed.length?wins.length/closed.length*100:0,avgW,avgL,mdd,n:trades.length,symbol,from:raw[WARMUP][0],to:raw[raw.length-1][0]};
+}
+
+function btSlice(raw,i){return raw.slice(0,i+1);}
+
+// Equity curve SVG
+function renderBtEquity(bt) {
+  if(!bt||bt.eq.length<2)return '';
+  var W=560,H=120,PL=8,PR=8,PT=8,PB=8;
+  var cw=W-PL-PR,ch=H-PT-PB;
+  var vals=bt.eq.map(function(e){return e.v;});
+  // buy-and-hold reference line
+  var bhEnd=100+bt.bhRet, bhVals=[100,bhEnd];
+  var allV=vals.concat(bhVals);
+  var minV=Math.min.apply(null,allV),maxV=Math.max.apply(null,allV);
+  var rng=(maxV-minV)||1; minV-=rng*0.05; maxV+=rng*0.05; rng=maxV-minV;
+  function px(i,tot){return PL+i/(tot-1)*cw;}
+  function py(v){return PT+ch-(v-minV)/rng*ch;}
+  // Strategy path
+  var sd='M'+px(0,vals.length).toFixed(1)+','+py(vals[0]).toFixed(1);
+  for(var i=1;i<vals.length;i++)sd+=' L'+px(i,vals.length).toFixed(1)+','+py(vals[i]).toFixed(1);
+  // B&H path (straight line from start to end)
+  var bPath='M'+PL.toFixed(1)+','+py(100).toFixed(1)+' L'+(PL+cw).toFixed(1)+','+py(bhEnd).toFixed(1);
+  // Zero line at 100
+  var zy=py(100).toFixed(1);
+  var zline=(zy>PT&&zy<PT+ch)?'<line x1="'+PL+'" y1="'+zy+'" x2="'+(PL+cw)+'" y2="'+zy+'" stroke="rgba(255,255,255,.08)" stroke-width="0.5"/>':'';
+  // Fill area under strategy curve
+  var fill=sd+' L'+(PL+cw).toFixed(1)+','+(PT+ch)+' L'+PL+','+(PT+ch)+' Z';
+  var endVal=vals[vals.length-1];
+  var fillCol=endVal>=100?'rgba(74,222,128,.1)':'rgba(248,113,113,.1)';
+  var lineCol=endVal>=100?'#4ade80':'#f87171';
+  return '<div style="padding:0 2px"><svg width="100%" viewBox="0 0 '+W+' '+H+'" style="display:block;height:120px" preserveAspectRatio="none">'
+    +zline
+    +'<path d="'+fill+'" fill="'+fillCol+'"/>'
+    +'<path d="'+bPath+'" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="4,3"/>'
+    +'<path d="'+sd+'" fill="none" stroke="'+lineCol+'" stroke-width="1.5" stroke-linejoin="round"/>'
+    +'<text x="'+(PL+cw-2)+'" y="'+(PT+8)+'" text-anchor="end" font-size="9" fill="'+lineCol+'" font-family="DM Mono,monospace">Strategy '+endVal.toFixed(1)+'</text>'
+    +'<text x="'+(PL+cw-2)+'" y="'+(PT+19)+'" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)" font-family="DM Mono,monospace">B&H '+(100+bt.bhRet).toFixed(1)+'</text>'
+    +'</svg></div>';
+}
+
+// Full backtest results section
+function renderBtSection(symbol) {
+  var bt=S.btResult&&S.btResult.symbol===symbol?S.btResult.data:null;
+  var btnLabel=bt?'↺ Re-run':'📈 Run Backtest';
+  var btn='<button class="bt-btn" onclick="triggerBt(\''+symbol+'\')">'+btnLabel+'</button>';
+  if(!bt)return btn;
+
+  var fp2=function(n){return (n>=0?'+':'')+n.toFixed(1)+'%';};
+  var dateStr=function(s){try{var d=new Date(s);return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'});}catch(e){return s||'';}};
+
+  var stats='<div class="bt-stats">'
+    +'<div class="bt-stat"><div class="bt-stat-label">Total return</div><div class="bt-stat-val" style="color:'+(bt.totalRet>=0?'#4ade80':'#f87171')+'">'+fp2(bt.totalRet)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Buy & hold</div><div class="bt-stat-val" style="color:'+(bt.bhRet>=0?'#4ade80':'#f87171')+'">'+fp2(bt.bhRet)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Win rate</div><div class="bt-stat-val">'+bt.wr.toFixed(0)+'%</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Avg win</div><div class="bt-stat-val" style="color:#4ade80">'+fp2(bt.avgW)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Avg loss</div><div class="bt-stat-val" style="color:#f87171">'+fp2(bt.avgL)+'</div></div>'
+    +'<div class="bt-stat"><div class="bt-stat-label">Max drawdown</div><div class="bt-stat-val" style="color:#f87171">-'+bt.mdd.toFixed(1)+'%</div></div>'
+    +'</div>';
+
+  var trades=bt.trades.map(function(t){
+    var cls=t.why==='Open'?'bt-open':t.win?'bt-win':'bt-loss';
+    return '<div class="bt-trade">'
+      +'<div><span style="color:var(--txt3)">In&nbsp;</span>'+dateStr(t.ed)+'<br><span style="color:var(--txt3)">Out </span>'+dateStr(t.xd)+'</div>'
+      +'<div>₹'+Math.round(t.ep)+' → ₹'+Math.round(t.xp)+'<br><span style="color:var(--txt3)">'+t.days+'d · '+t.why+'</span></div>'
+      +'<div class="'+cls+'" style="text-align:right;font-weight:700">'+(t.ret>=0?'+':'')+t.ret.toFixed(1)+'%</div>'
+      +'</div>';
+  }).join('');
+
+  var periodNote='<div style="padding:8px 14px;font-size:10px;color:var(--txt3);font-family:DM Mono,monospace;border-top:0.5px solid var(--border)">'
+    +'Backtest period: '+dateStr(bt.from)+' – '+dateStr(bt.to)+' · '+bt.n+' trade'+(bt.n===1?'':'s')+' · Entry ≥80 pts · Exit &lt;65 pts or stop'
+    +'</div>';
+
+  return btn+'<div class="bt-section">'
+    +'<div class="bt-header"><span class="bt-title">Backtest results — '+symbol+'</span></div>'
+    +renderBtEquity(bt)
+    +stats
+    +(bt.trades.length?'<div style="border-top:0.5px solid var(--border);padding:8px 14px;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">Trade log</div>'+trades:'')+periodNote
+    +'</div>';
+}
+
+function triggerBt(symbol) {
+  var data=runBacktest(symbol);
+  if(!data){showToast('Need more history — scan this stock first');return;}
+  S.btResult={symbol,data};
+  render();
+}
+
 // ── Render: Detail ─────────────────────────────────────
 function renderDetail(){
   var s = S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
   var secLabel = SECTORS[s.sector] ? SECTORS[s.sector].label : (s.sector||'Index');
   return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
     + renderChart(s._candles, s.stopLoss)
-    + buildStockBody(s);
+    + buildStockBody(s)
+    + renderBtSection(s.symbol)
+    + '<div style="height:24px"></div>';
 }
 
 // ── Render: Analyze ────────────────────────────────────
@@ -1195,7 +1386,7 @@ function renderAnalyze(){
       +'<div style="font-size:12px;color:var(--txt3)">Check the symbol and try again. Use NSE format (e.g. TCS, HDFCBANK, M&amp;M).</div>'
     +'</div>';
   } else if (res) {
-    body = renderChart(res._candles, res.stopLoss) + buildStockBody(res);
+    body = renderChart(res._candles, res.stopLoss) + buildStockBody(res) + renderBtSection(res.symbol) + '<div style="height:24px"></div>';
   } else {
     // Empty state — quick-pick tiles
     var picks = ['TCS','RELIANCE','HDFCBANK','INFY','TATAMOTORS','SUNPHARMA','ITC','ADANIGREEN','BAJFINANCE','LT','WIPRO','AXISBANK'];
