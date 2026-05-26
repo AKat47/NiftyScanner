@@ -21,6 +21,43 @@ html,body{height:100%;background:#000;}
 body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .app{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);}
 .pb{padding-bottom:72px;}
+
+/* ── Desktop sidebar layout ────────────────────────────── */
+@media(min-width:768px){
+  body{align-items:flex-start;}
+  .app{flex-direction:row;max-width:1440px;min-height:100dvh;}
+  .main-area{flex:1;min-width:0;display:flex;flex-direction:column;overflow-x:hidden;}
+  .pb{padding-bottom:24px;}
+  /* Hide mobile chrome */
+  .topbar{display:none;}
+  .bottom-nav{display:none;}
+  /* Sidebar */
+  .sidebar{display:flex!important;width:220px;min-width:220px;height:100dvh;position:sticky;top:0;border-right:0.5px solid var(--border);flex-direction:column;overflow-y:auto;background:var(--bg);}
+  .sb-brand{padding:22px 18px 18px;border-bottom:0.5px solid var(--border);}
+  .sb-pill{display:flex;align-items:center;gap:8px;padding:11px 18px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .15s;}
+  .sb-pill:hover{background:var(--bg2);}
+  .sb-pill .status-txt{font-size:11px;color:var(--txt2);}
+  .sb-nav{display:flex;flex-direction:column;padding:8px 10px;flex:1;}
+  .sb-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--r);border:none;background:transparent;color:var(--txt3);font-size:13px;font-weight:600;cursor:pointer;font-family:'Sora',sans-serif;width:100%;text-align:left;transition:all .15s;-webkit-tap-highlight-color:transparent;}
+  .sb-btn:hover{background:var(--bg2);color:var(--txt);}
+  .sb-btn.active{background:rgba(61,255,160,.07);color:var(--accent);}
+  .sb-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
+  .sb-regime{padding:14px 18px;border-top:0.5px solid var(--border);}
+  /* Stock card grid */
+  .sig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0.5px;background:var(--border);}
+  .sig-card{background:var(--bg);}
+  /* Filter / Setup 2-col grid */
+  .setup-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:24px;align-items:start;}
+  .setup-card{margin-bottom:0;}
+  .setup-full{grid-column:1 / -1;}
+  /* Detail view 2-col */
+  .detail-cols{display:grid;grid-template-columns:1fr 1fr;gap:0.5px;background:var(--border);align-items:start;}
+  .detail-col{background:var(--bg);}
+}
+@media(min-width:1100px){
+  .sidebar{width:240px;min-width:240px;}
+  .sig-grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));}
+}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 13px;border-bottom:0.5px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:30;}
 .brand-name{font-size:16px;font-weight:700;color:var(--txt);letter-spacing:-.3px;}
 .brand-sub{font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;margin-top:2px;}
@@ -149,17 +186,47 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 </head>
 <body>
 <div class="app">
-  <div class="topbar">
-    <div>
+
+  <!-- ── Sidebar (desktop only) ─────────────────────────── -->
+  <div class="sidebar" id="sidebar" style="display:none">
+    <div class="sb-brand">
       <div class="brand-name">Nifty Scanner</div>
-      <div class="brand-sub" id="brandSub">Momentum · Score/120 · Market Regime</div>
+      <div style="font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;margin-top:3px">Momentum · Score/120</div>
     </div>
-    <div class="status-pill" onclick="switchTab('setup')">
-      <div class="dot" id="connDot" style="background:#4d5c50"></div>
-      <span class="status-txt" id="connLabel">Connecting…</span>
+    <div class="sb-pill" onclick="switchTab('setup')">
+      <div class="dot" id="connDotSb" style="background:#4d5c50"></div>
+      <span class="status-txt" id="connLabelSb">Connecting…</span>
     </div>
+    <div class="sb-nav">
+      <button class="sb-btn active" id="sb-scanner" onclick="switchTab('scanner')">
+        <span class="sb-icon">◈</span> Scanner
+      </button>
+      <button class="sb-btn" id="sb-filter" onclick="switchTab('filter')">
+        <span class="sb-icon">⊟</span> Filter
+      </button>
+      <button class="sb-btn" id="sb-setup" onclick="switchTab('setup')">
+        <span class="sb-icon">◧</span> Setup
+      </button>
+    </div>
+    <div class="sb-regime" id="sbRegime"></div>
   </div>
-  <div id="content" class="pb"></div>
+
+  <!-- ── Main content ───────────────────────────────────── -->
+  <div class="main-area">
+    <!-- Mobile topbar (hidden on desktop) -->
+    <div class="topbar">
+      <div>
+        <div class="brand-name">Nifty Scanner</div>
+        <div class="brand-sub" id="brandSub">Momentum · Score/120 · Market Regime</div>
+      </div>
+      <div class="status-pill" onclick="switchTab('setup')">
+        <div class="dot" id="connDot" style="background:#4d5c50"></div>
+        <span class="status-txt" id="connLabel">Connecting…</span>
+      </div>
+    </div>
+    <div id="content" class="pb"></div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -328,14 +395,25 @@ function sma(arr, n) {
 }
 
 function calcRSI(closes) {
-  var n=14;
-  if (closes.length < n+1) return null;
-  var sl=closes.slice(-(n+1)), g=0, l=0;
-  for (var i=1;i<sl.length;i++){
-    var d=sl[i]-sl[i-1]; if(d>0) g+=d; else l+=Math.abs(d);
+  // Wilder's smoothed RSI(14) using all available data
+  var n = 14;
+  if (closes.length < n + 1) return null;
+  // Seed with simple average over first n periods
+  var g = 0, l = 0;
+  for (var i = 1; i <= n; i++) {
+    var d = closes[i] - closes[i - 1];
+    if (d > 0) g += d; else l -= d;
   }
-  var ag=g/n, al=l/n;
-  return al===0?100:100-(100/(1+(ag/al)));
+  var ag = g / n, al = l / n;
+  // Wilder smoothing over remaining candles
+  for (var i = n + 1; i < closes.length; i++) {
+    var d = closes[i] - closes[i - 1];
+    var gain = d > 0 ? d : 0;
+    var loss = d < 0 ? -d : 0;
+    ag = (ag * (n - 1) + gain) / n;
+    al = (al * (n - 1) + loss) / n;
+  }
+  return al === 0 ? 100 : 100 - (100 / (1 + ag / al));
 }
 
 function calcATR(highs, lows, closes, n) {
@@ -401,8 +479,9 @@ function applyStrategy(raw, symbol, sector, source) {
   var atrPrev = highs.length > 28 ? calcATR(highs.slice(0,-7), lows.slice(0,-7), closes.slice(0,-7), 14) : null;
   var high52  = Math.max.apply(null, highs.slice(-252));
   var low10   = Math.min.apply(null, lows.slice(-10));
-  var vol     = vols[vols.length-1];
-  var avgVol20 = sma(vols.slice(-20), 20);
+  var vol      = vols[vols.length-1];
+  // avgVol20: previous 20 days excluding today so comparison is fair
+  var avgVol20 = sma(vols.slice(-21, -1), 20);
   var vol20   = calcVolatility(closes, 20);
   var vol50   = calcVolatility(closes, 50);
 
@@ -512,9 +591,11 @@ function marketRegime() {
 
 // ── Date range ─────────────────────────────────────────
 function getDateRange() {
-  var to   = new Date();
-  var from = new Date(); from.setDate(from.getDate()-400);
-  return { from:from.toISOString().split('T')[0], to:to.toISOString().split('T')[0] };
+  // Use IST date (UTC+5:30) so the range is always correct for Indian users
+  var now  = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  var to   = now.toISOString().split('T')[0];
+  var from = new Date(now - 400 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  return { from: from, to: to };
 }
 
 // ── Batch scan via /api/scan ───────────────────────────
@@ -607,19 +688,43 @@ function updateConnPill() {
   var src = activeSource();
   var colors = { kite:'#4ade80', angel:'#f59e0b', yahoo:'#a78bfa' };
   var labels = { kite:'Live · Kite', angel:'Live · Angel', yahoo:'Yahoo Finance' };
-  if (!S.sources.kite.connected && !S.sources.angel.connected) {
-    document.getElementById('connDot').style.background = '#a78bfa';
-    document.getElementById('connLabel').textContent = 'Yahoo fallback';
-  } else {
-    document.getElementById('connDot').style.background = colors[src]||'#4d5c50';
-    document.getElementById('connLabel').textContent = labels[src]||src;
-  }
+  var color = (!S.sources.kite.connected && !S.sources.angel.connected) ? '#a78bfa' : (colors[src]||'#4d5c50');
+  var label = (!S.sources.kite.connected && !S.sources.angel.connected) ? 'Yahoo fallback' : (labels[src]||src);
+  // Mobile pill
+  var dot = document.getElementById('connDot');
+  var lbl = document.getElementById('connLabel');
+  if (dot) dot.style.background = color;
+  if (lbl) lbl.textContent = label;
+  // Desktop sidebar pill
+  var sbDot = document.getElementById('connDotSb');
+  var sbLbl = document.getElementById('connLabelSb');
+  if (sbDot) sbDot.style.background = color;
+  if (sbLbl) sbLbl.textContent = label;
+}
+
+function updateSbRegime() {
+  var el = document.getElementById('sbRegime');
+  if (!el) return;
+  var regime = marketRegime();
+  if (!regime.niftyClose) { el.innerHTML = '<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">Nifty — scan to load</div>'; return; }
+  el.innerHTML =
+    '<div style="font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace;margin-bottom:7px">Market</div>'
+    +'<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">'
+      +'<div style="width:8px;height:8px;border-radius:50%;background:'+(regime.bullish?'var(--green)':'var(--amber)')+'"></div>'
+      +'<span style="font-size:12px;font-weight:600;color:'+(regime.bullish?'var(--green)':'var(--amber)')+';">'+(regime.bullish?'Bullish':'Bearish')+'</span>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">Nifty ₹'+fmt(regime.niftyClose)+'</div>'
+    +'<div style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace;margin-top:2px">50D ₹'+fmt(regime.nifty50dma||0)+' · 200D ₹'+fmt(regime.nifty200dma||0)+'</div>';
 }
 
 function switchTab(tab){
   S.tab=tab; S.detail=null;
+  // Mobile bottom nav
   document.querySelectorAll('.bnav').forEach(function(e){e.classList.remove('active');});
-  var el=document.getElementById('bnav-'+tab); if(el) el.classList.add('active');
+  var mEl=document.getElementById('bnav-'+tab); if(mEl) mEl.classList.add('active');
+  // Desktop sidebar nav
+  document.querySelectorAll('.sb-btn').forEach(function(e){e.classList.remove('active');});
+  var sEl=document.getElementById('sb-'+tab); if(sEl) sEl.classList.add('active');
   render();
 }
 
@@ -735,7 +840,8 @@ function renderScanner(){
       +'<div class="count-cell"><div class="count-num" style="color:var(--txt3)">'+weakArr.length+'</div><div class="count-lbl">Weak</div></div>'
       +'</div>' : '';
 
-  var filterNote = (minScore>0||clsFilter!=='all')
+  var anyUnchecked = Object.keys(clsSel).some(function(k){ return !clsSel[k]; });
+  var filterNote = (minScore > 0 || anyUnchecked)
     ? ' · <span style="color:var(--accent)">Filtered</span>' : '';
   var listHdr = '<div class="list-header"><div class="list-label">'+syms.length+' symbols'+filterNote+'</div>'
     +'<div class="manage-link" onclick="S.modal=true;render()">+ Manage</div></div>';
@@ -751,12 +857,14 @@ function renderScanner(){
     function grp(arr, lbl, color) {
       if(!arr.length) return '';
       return '<div class="group-label" style="color:'+color+'">'+lbl+' ('+arr.length+')</div>'
-        +arr.map(function(s){return sigCard(S.results[s]);}).join('');
+        +'<div class="sig-grid">'
+        +arr.map(function(s){return sigCard(S.results[s]);}).join('')
+        +'</div>';
     }
     results = grp(eliteArr,'ELITE MOMENTUM','var(--green)')
       +grp(strongArr,'STRONG MOMENTUM','var(--amber)')
       +grp(emergArr,'EMERGING MOMENTUM','var(--blue)')
-      +(clsFilter==='all'&&minScore<70?grp(weakArr,'WEAK SETUP','var(--txt3)'):'');
+      +grp(weakArr,'WEAK SETUP','var(--txt3)');
   }
 
   var modal='';
@@ -845,28 +953,35 @@ function renderDetail(){
   ];
 
   var srcCls=s.source||'yahoo';
-  return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
-    +'<div class="d-hero">'
-      +'<div class="d-sym">'+s.symbol+'</div>'
-      +'<div class="d-sector-lbl">'+secLabel+' · NSE</div>'
-      +'<div class="d-price">₹'+fmt(s.close)+'</div>'
-      +'<div class="d-chg '+(s.chg>=0?'pos':'neg')+'">'+fmtPct(s.chg)+' today</div>'
-      +'<div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">'
-        +'<div style="padding:7px 16px;border-radius:20px;background:'+CLS_DIM[s.classification]+';display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:22px;font-weight:700;font-family:DM Mono,monospace;color:'+CLS_COLOR[s.classification]+'">'+s.score+'</span>'
-          +'<span style="font-size:11px;font-weight:600;color:'+CLS_COLOR[s.classification]+'">'+CLS_FULL[s.classification]+'</span>'
-        +'</div>'
-        +(!regime.bullish?'<div style="padding:5px 12px;border-radius:20px;background:var(--amber-dim);font-size:11px;font-weight:600;color:var(--amber)">Market Not Supportive</div>':'')
+  var hero='<div class="d-hero">'
+    +'<div class="d-sym">'+s.symbol+'</div>'
+    +'<div class="d-sector-lbl">'+secLabel+' · NSE</div>'
+    +'<div class="d-price">₹'+fmt(s.close)+'</div>'
+    +'<div class="d-chg '+(s.chg>=0?'pos':'neg')+'">'+fmtPct(s.chg)+' today</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">'
+      +'<div style="padding:7px 16px;border-radius:20px;background:'+CLS_DIM[s.classification]+';display:flex;align-items:center;gap:8px">'
+        +'<span style="font-size:22px;font-weight:700;font-family:DM Mono,monospace;color:'+CLS_COLOR[s.classification]+'">'+s.score+'</span>'
+        +'<span style="font-size:11px;font-weight:600;color:'+CLS_COLOR[s.classification]+'">'+CLS_FULL[s.classification]+'</span>'
       +'</div>'
-      +'<div class="src-badge '+srcCls+'" style="margin-top:8px">Data: '+srcLabel(srcCls)+'</div>'
+      +(!regime.bullish?'<div style="padding:5px 12px;border-radius:20px;background:var(--amber-dim);font-size:11px;font-weight:600;color:var(--amber)">Market Not Supportive</div>':'')
     +'</div>'
-    +'<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Key Metrics</div>'
-      +'<div class="metric-grid">'+metrics.map(function(m){
-        return '<div class="metric-cell"><div class="metric-lbl">'+m.l+'</div><div class="metric-val">'+m.v+'</div></div>';
-      }).join('')+'</div></div>'
-    +'<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Score Breakdown — '+s.score+' / 120</div>'+scoreRowsHtml+'</div>'
-    +(s.stopLoss?'<div class="sl-note" style="margin-top:14px"><strong>Stop Loss:</strong> ₹'+s.stopLoss+' (tighter of 10-day low or Entry − 2×ATR)</div>':'')
-    +'<div style="height:20px"></div>';
+    +'<div class="src-badge '+srcCls+'" style="margin-top:8px">Data: '+srcLabel(srcCls)+'</div>'
+  +'</div>';
+
+  var metricsBox='<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Key Metrics</div>'
+    +'<div class="metric-grid">'+metrics.map(function(m){
+      return '<div class="metric-cell"><div class="metric-lbl">'+m.l+'</div><div class="metric-val">'+m.v+'</div></div>';
+    }).join('')+'</div></div>';
+
+  var breakdownBox='<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Score Breakdown — '+s.score+' / 120</div>'+scoreRowsHtml+'</div>';
+  var slBox=s.stopLoss?'<div class="sl-note" style="margin-top:14px"><strong>Stop Loss:</strong> ₹'+s.stopLoss+' (tighter of 10-day low or Entry − 2×ATR)</div>':'';
+
+  // On desktop: hero+metrics left, score breakdown right
+  return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
+    +'<div class="detail-cols">'
+      +'<div class="detail-col">'+hero+metricsBox+slBox+'<div style="height:20px"></div></div>'
+      +'<div class="detail-col">'+breakdownBox+'<div style="height:20px"></div></div>'
+    +'</div>';
 }
 
 // ── Render: Filter ─────────────────────────────────────
@@ -949,17 +1064,18 @@ function renderFilter(){
     +'<div class="setup-card">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">'
         +'<h3 style="margin:0">Minimum Score</h3>'
-        +'<span style="font-size:20px;font-weight:700;font-family:DM Mono,monospace;color:'
+        +'<span id="scoreVal" style="font-size:20px;font-weight:700;font-family:DM Mono,monospace;color:'
           +(sc>=90?'var(--green)':sc>=80?'var(--amber)':sc>=70?'var(--blue)':'var(--txt)')+'">'
           +sc
         +'</span>'
       +'</div>'
       +zoneBar
-      +'<input type="range" min="0" max="120" step="5" value="'+sc+'" '
-        +'oninput="S.filter.minScore=+this.value;render()" '
+      +'<input type="range" min="0" max="120" step="5" value="'+sc+'" id="scoreSlider" '
+        +'oninput="S.filter.minScore=+this.value;var h=document.getElementById(\'scoreHint\');var v=document.getElementById(\'scoreVal\');if(v)v.textContent=this.value;if(h)h.textContent=(+this.value===0?\'Showing all scores — drag right to raise the bar\':(+this.value>=90?\'Elite zone — only the highest conviction setups\':(+this.value>=80?\'Strong zone — well-positioned, confirmed momentum\':(+this.value>=70?\'Emerging zone — early movers, watch closely\':\'Below 70 — unconfirmed setups included\'))))" '
+        +'onchange="render()" '
         +'style="width:100%;accent-color:'
           +(sc>=90?'var(--green)':sc>=80?'var(--amber)':sc>=70?'var(--blue)':'var(--accent)')+';margin:0">'
-      +'<div style="font-size:11px;color:var(--txt3);margin-top:8px">'
+      +'<div id="scoreHint" style="font-size:11px;color:var(--txt3);margin-top:8px">'
         +(sc===0?'Showing all scores — drag right to raise the bar'
           :sc>=90?'Elite zone — only the highest conviction setups'
           :sc>=80?'Strong zone — well-positioned, confirmed momentum'
@@ -979,7 +1095,7 @@ function renderFilter(){
     +'</div>'
 
     // Scoring legend
-    +'<div class="setup-card">'
+    +'<div class="setup-card setup-full">'
       +'<h3>Scoring Reference</h3>'
       +'<div style="font-size:11px;color:var(--txt2);line-height:2;font-family:DM Mono,monospace">'
         +'SMA50 > SMA200 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+20<br>'
@@ -1015,7 +1131,7 @@ function renderSetup(){
   }).join('');
 
   return '<div class="setup-wrap">'
-    +'<div class="setup-card">'
+    +'<div class="setup-card setup-full">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
         +'<h3 style="margin:0">Data Sources</h3>'
         +'<span style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace;">Kite → Angel → Yahoo</span>'
@@ -1040,7 +1156,7 @@ function renderSetup(){
     +'<div class="setup-card" style="background:var(--bg3);border-style:dashed">'
       +'<h3 style="color:var(--txt3)">MongoDB Cache</h3>'
       +'<div style="font-size:11px;color:var(--txt3);line-height:1.8">'
-        +'Candle data is cached in MongoDB once per day and shared across all users. Set <span style="color:var(--accent);font-family:DM Mono,monospace">MONGODB_URI</span> in Vercel environment variables.'
+        +'Candle data is cached in MongoDB once per hour (IST) and shared across all users — Angel data refreshes automatically each hour during market hours. Set <span style="color:var(--accent);font-family:DM Mono,monospace">MONGODB_URI</span> in Vercel environment variables.'
       +'</div>'
     +'</div>'
   +'</div>';
@@ -1049,10 +1165,11 @@ function renderSetup(){
 // ── Main render ────────────────────────────────────────
 function render(){
   var el=document.getElementById('content');
-  if(S.tab==='setup'){  el.innerHTML=renderSetup();  return; }
-  if(S.tab==='filter'){ el.innerHTML=renderFilter(); return; }
-  if(S.detail){         el.innerHTML=renderDetail(); return; }
-  el.innerHTML=renderScanner();
+  if(S.tab==='setup'){  el.innerHTML=renderSetup();  }
+  else if(S.tab==='filter'){ el.innerHTML=renderFilter(); }
+  else if(S.detail){    el.innerHTML=renderDetail(); }
+  else { el.innerHTML=renderScanner(); }
+  updateSbRegime();
 }
 
 // ── Boot ───────────────────────────────────────────────
