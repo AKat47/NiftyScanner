@@ -618,15 +618,21 @@ function batchScan(syms, sectorMap, force) {
       if (!data.ok) throw new Error(data.error || 'scan error');
       // Process NIFTY50 first so RS calculations work
       var n50 = data.results['NIFTY50'];
-      if (n50 && n50.candles && n50.candles.length)
-        S.results['NIFTY50'] = applyStrategy(n50.candles, 'NIFTY50', 'INDEX', n50.source);
+      if (n50 && n50.candles && n50.candles.length) {
+        var r50 = applyStrategy(n50.candles, 'NIFTY50', 'INDEX', n50.source);
+        r50._candles = n50.candles;
+        S.results['NIFTY50'] = r50;
+      }
       // Process stocks
       Object.keys(data.results).forEach(function(sym){
         if (sym === 'NIFTY50') return;
         var r = data.results[sym];
         var sec = sectorMap[sym] || S.activeSector;
-        if (r && r.candles && r.candles.length)
-          S.results[sym] = applyStrategy(r.candles, sym, sec, r.source);
+        if (r && r.candles && r.candles.length) {
+          var res = applyStrategy(r.candles, sym, sec, r.source);
+          res._candles = r.candles; // kept for chart rendering
+          S.results[sym] = res;
+        }
       });
     });
 }
@@ -916,6 +922,130 @@ function sigCard(s){
     +'</div>';
 }
 
+// ── Render: Price chart (pure SVG) ────────────────────
+function renderChart(raw) {
+  if (!raw || raw.length < 20) return '';
+
+  // Layout constants
+  var W=600, PH=200, VH=42, PL=52, PR=10, PT=16, GAP=8, XLBL=14, PB=4;
+  var TH = PT + PH + GAP + VH + XLBL + PB; // ≈ 300
+  var cw = W - PL - PR;
+
+  // Slice: show last 120 candles; keep full history for SMA computation
+  var N = Math.min(120, raw.length);
+  var slice = raw.slice(-N);
+  var startIdx = raw.length - N; // index in raw[] where display slice begins
+
+  // Compute SMA50 and SMA200 at each display position using full history
+  var s50 = [], s200 = [];
+  for (var i = 0; i < N; i++) {
+    var ri = startIdx + i;
+    if (ri >= 49) {
+      var a=0; for (var j=ri-49;j<=ri;j++) a+=+raw[j][4]; s50.push(a/50);
+    } else s50.push(null);
+    if (ri >= 199) {
+      var a=0; for (var j=ri-199;j<=ri;j++) a+=+raw[j][4]; s200.push(a/200);
+    } else s200.push(null);
+  }
+
+  var opens  = slice.map(function(c){return +c[1]||0;});
+  var highs  = slice.map(function(c){return +c[2]||0;});
+  var lows   = slice.map(function(c){return +c[3]||0;});
+  var closes = slice.map(function(c){return +c[4]||0;});
+  var vols   = slice.map(function(c){return +c[5]||0;});
+
+  // Price range — include SMA values so lines don't clip
+  var allP = highs.concat(lows)
+    .concat(s50.filter(function(v){return v!==null;}))
+    .concat(s200.filter(function(v){return v!==null;}));
+  var maxP = Math.max.apply(null,allP), minP = Math.min.apply(null,allP);
+  var pRng = (maxP-minP)||1;
+  maxP += pRng*0.04; minP -= pRng*0.04; pRng = maxP-minP;
+
+  var maxV = Math.max.apply(null,vols)||1;
+  var cpw  = cw/N;                            // width per candle column
+  var bw   = Math.max(1, Math.min(8, cpw*0.6)); // body width
+
+  function px(i) { return PL + (i+0.5)*cpw; }
+  function py(p)  { return PT + PH - ((p-minP)/pRng)*PH; }
+  function vy(v)  { return PT+PH+GAP+VH - (v/maxV)*VH; }
+  function fp(p)  { return p>=1000 ? Math.round(p) : p.toFixed(p<10?2:0); }
+
+  // ── Candles ──────────────────────────────────────────
+  var cv = '';
+  for (var i=0;i<N;i++) {
+    var o=opens[i],h=highs[i],l=lows[i],c=closes[i];
+    if (!h||!l) continue;
+    var up = c>=o, col = up?'#4ade80':'#f87171';
+    var x=px(i), bTop=py(Math.max(o,c)), bBot=py(Math.min(o,c)), bH=Math.max(1,bBot-bTop);
+    cv += '<line x1="'+x.toFixed(1)+'" y1="'+py(h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+py(l).toFixed(1)+'" stroke="'+col+'" stroke-width="0.8" opacity="0.45"/>';
+    cv += '<rect x="'+(x-bw/2).toFixed(1)+'" y="'+bTop.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bH.toFixed(1)+'" fill="'+col+'" opacity="'+(up?'0.72':'0.88')+'"/>';
+  }
+
+  // ── Volume bars ──────────────────────────────────────
+  var vBase = PT+PH+GAP+VH;
+  var vv = '';
+  for (var i=0;i<N;i++) {
+    if (!vols[i]) continue;
+    var x=px(i), top=vy(vols[i]), up=closes[i]>=opens[i];
+    vv += '<rect x="'+(x-bw/2).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(vBase-top).toFixed(1)+'" fill="'+(up?'rgba(74,222,128,.28)':'rgba(248,113,113,.28)')+'"/>';
+  }
+
+  // ── SMA path (handles null gaps) ────────────────────
+  function smaPath(arr, col) {
+    var d='', open=false;
+    for (var i=0;i<arr.length;i++) {
+      if (arr[i]===null){open=false;continue;}
+      var pt=px(i).toFixed(1)+','+py(arr[i]).toFixed(1);
+      d += (open?' L':' M')+pt; open=true;
+    }
+    return d ? '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linejoin="round" opacity="0.9"/>' : '';
+  }
+
+  // ── Grid lines + Y-axis labels ───────────────────────
+  var grid='';
+  for (var i=0;i<=4;i++) {
+    var p=minP+pRng*i/4, y=py(p).toFixed(1);
+    grid += '<line x1="'+PL+'" y1="'+y+'" x2="'+(PL+cw)+'" y2="'+y+'" stroke="rgba(255,255,255,.04)" stroke-width="0.5"/>';
+    grid += '<text x="'+(PL-5)+'" y="'+(+y+3.5)+'" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,.28)" font-family="DM Mono,monospace">'+fp(p)+'</text>';
+  }
+
+  // ── Current-price dashed line ────────────────────────
+  var cpY = py(closes[N-1]).toFixed(1);
+  var cpLine = '<line x1="'+PL+'" y1="'+cpY+'" x2="'+(PL+cw)+'" y2="'+cpY+'" stroke="#3dffa0" stroke-width="0.75" stroke-dasharray="3,4" opacity="0.5"/>';
+  var cpLabel = '<rect x="'+(PL+cw-36)+'" y="'+(+cpY-8)+'" width="36" height="12" rx="3" fill="#3dffa0" opacity="0.12"/>'
+    + '<text x="'+(PL+cw-4)+'" y="'+(+cpY+3)+'" text-anchor="end" font-size="8" fill="#3dffa0" font-family="DM Mono,monospace">'+fp(closes[N-1])+'</text>';
+
+  // ── X-axis month labels ──────────────────────────────
+  var xLbls='', MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var xStep = Math.max(10, Math.floor(N/6));
+  for (var i=0;i<N;i+=xStep) {
+    try {
+      var dt=new Date(slice[i][0]);
+      var lbl=MONTHS[dt.getUTCMonth()]+(i===0||dt.getUTCMonth()===0?' '+dt.getUTCFullYear()%100:'');
+      xLbls+='<text x="'+px(i).toFixed(1)+'" y="'+(PT+PH+GAP+VH+XLBL-1)+'" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.2)" font-family="DM Mono,monospace">'+lbl+'</text>';
+    } catch(e){}
+  }
+
+  // ── Separator line between price & volume ────────────
+  var sep='<line x1="'+PL+'" y1="'+(PT+PH+GAP/2)+'" x2="'+(PL+cw)+'" y2="'+(PT+PH+GAP/2)+'" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>';
+
+  // ── Legend ───────────────────────────────────────────
+  var ly=PT+12;
+  var legend='<rect x="'+PL+'" y="'+(ly-5)+'" width="14" height="2" rx="1" fill="#60a5fa"/>'
+    +'<text x="'+(PL+18)+'" y="'+ly+'" font-size="9" fill="#60a5fa" font-family="DM Mono,monospace">SMA50</text>'
+    +'<rect x="'+(PL+60)+'" y="'+(ly-5)+'" width="14" height="2" rx="1" fill="#fbbf24"/>'
+    +'<text x="'+(PL+78)+'" y="'+ly+'" font-size="9" fill="#fbbf24" font-family="DM Mono,monospace">SMA200</text>'
+    +'<text x="'+(PL+140)+'" y="'+ly+'" font-size="9" fill="rgba(255,255,255,.2)" font-family="DM Mono,monospace">Last '+N+' days</text>';
+
+  return '<div style="background:var(--bg2);border-bottom:0.5px solid var(--border);overflow:hidden">'
+    +'<svg width="100%" viewBox="0 0 '+W+' '+TH+'" preserveAspectRatio="none" style="display:block;height:280px">'
+    +grid+sep+cpLine+vv+cv
+    +smaPath(s50,'#60a5fa')+smaPath(s200,'#fbbf24')
+    +cpLabel+legend+xLbls
+    +'</svg></div>';
+}
+
 // ── Render: Detail ─────────────────────────────────────
 function renderDetail(){
   var s=S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
@@ -983,8 +1113,10 @@ function renderDetail(){
   var breakdownBox='<div class="cond-box" style="margin-top:14px"><div class="cond-box-title">Score Breakdown — '+s.score+' / 120</div>'+scoreRowsHtml+'</div>';
   var slBox=s.stopLoss?'<div class="sl-note" style="margin-top:14px"><strong>Stop Loss:</strong> ₹'+s.stopLoss+' (tighter of 10-day low or Entry − 2×ATR)</div>':'';
 
-  // On desktop: hero+metrics left, score breakdown right
+  // Chart (full width) then 2-col on desktop
+  var chart = renderChart(s._candles);
   return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
+    +chart
     +'<div class="detail-cols">'
       +'<div class="detail-col">'+hero+metricsBox+slBox+'<div style="height:20px"></div></div>'
       +'<div class="detail-col">'+breakdownBox+'<div style="height:20px"></div></div>'
