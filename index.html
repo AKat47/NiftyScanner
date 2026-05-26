@@ -932,7 +932,7 @@ function sigCard(s){
 }
 
 // ── Render: Price chart (pure SVG) ────────────────────
-function renderChart(raw) {
+function renderChart(raw, stopLoss) {
   if (!raw || raw.length < 20) return '';
 
   // Layout constants
@@ -1019,11 +1019,22 @@ function renderChart(raw) {
     grid += '<text x="'+(PL-5)+'" y="'+(+y+3.5)+'" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,.28)" font-family="DM Mono,monospace">'+fp(p)+'</text>';
   }
 
-  // ── Current-price dashed line ────────────────────────
-  var cpY = py(closes[N-1]).toFixed(1);
-  var cpLine = '<line x1="'+PL+'" y1="'+cpY+'" x2="'+(PL+cw)+'" y2="'+cpY+'" stroke="#3dffa0" stroke-width="0.75" stroke-dasharray="3,4" opacity="0.5"/>';
-  var cpLabel = '<rect x="'+(PL+cw-36)+'" y="'+(+cpY-8)+'" width="36" height="12" rx="3" fill="#3dffa0" opacity="0.12"/>'
-    + '<text x="'+(PL+cw-4)+'" y="'+(+cpY+3)+'" text-anchor="end" font-size="8" fill="#3dffa0" font-family="DM Mono,monospace">'+fp(closes[N-1])+'</text>';
+  // ── Entry (current price) dashed line ────────────────
+  var entryPrice = closes[N-1];
+  var cpY = py(entryPrice).toFixed(1);
+  var cpLine = '<line x1="'+PL+'" y1="'+cpY+'" x2="'+(PL+cw)+'" y2="'+cpY+'" stroke="#3dffa0" stroke-width="0.9" stroke-dasharray="4,4" opacity="0.65"/>';
+  var cpLabel = '<rect x="'+(PL+cw-44)+'" y="'+(+cpY-8)+'" width="44" height="12" rx="3" fill="rgba(61,255,160,.12)"/>'
+    + '<text x="'+(PL+cw-4)+'" y="'+(+cpY+3)+'" text-anchor="end" font-size="8" fill="#3dffa0" font-family="DM Mono,monospace">↑ '+fp(entryPrice)+'</text>';
+
+  // ── Stop-loss dashed line ─────────────────────────────
+  var slLine = '', slLabel = '';
+  var slVal = stopLoss ? parseFloat(stopLoss) : null;
+  if (slVal && slVal > minP && slVal < maxP) {
+    var slY = py(slVal).toFixed(1);
+    slLine  = '<line x1="'+PL+'" y1="'+slY+'" x2="'+(PL+cw)+'" y2="'+slY+'" stroke="#f87171" stroke-width="0.9" stroke-dasharray="3,3" opacity="0.7"/>';
+    slLabel = '<rect x="'+(PL+cw-44)+'" y="'+(+slY-8)+'" width="44" height="12" rx="3" fill="rgba(248,113,113,.1)"/>'
+      + '<text x="'+(PL+cw-4)+'" y="'+(+slY+3)+'" text-anchor="end" font-size="8" fill="#f87171" font-family="DM Mono,monospace">↓ '+fp(slVal)+'</text>';
+  }
 
   // ── X-axis month labels ──────────────────────────────
   var xLbls='', MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1045,13 +1056,17 @@ function renderChart(raw) {
     +'<text x="'+(PL+18)+'" y="'+ly+'" font-size="9" fill="#60a5fa" font-family="DM Mono,monospace">SMA50</text>'
     +'<rect x="'+(PL+60)+'" y="'+(ly-5)+'" width="14" height="2" rx="1" fill="#fbbf24"/>'
     +'<text x="'+(PL+78)+'" y="'+ly+'" font-size="9" fill="#fbbf24" font-family="DM Mono,monospace">SMA200</text>'
-    +'<text x="'+(PL+140)+'" y="'+ly+'" font-size="9" fill="rgba(255,255,255,.2)" font-family="DM Mono,monospace">Last '+N+' days</text>';
+    +(slVal ? '<line x1="'+(PL+140)+'" y1="'+(ly-2)+'" x2="'+(PL+154)+'" y2="'+(ly-2)+'" stroke="#3dffa0" stroke-width="1.5" stroke-dasharray="3,2"/>'
+           +'<text x="'+(PL+158)+'" y="'+ly+'" font-size="9" fill="#3dffa0" font-family="DM Mono,monospace">Entry</text>'
+           +'<line x1="'+(PL+192)+'" y1="'+(ly-2)+'" x2="'+(PL+206)+'" y2="'+(ly-2)+'" stroke="#f87171" stroke-width="1.5" stroke-dasharray="3,2"/>'
+           +'<text x="'+(PL+210)+'" y="'+ly+'" font-size="9" fill="#f87171" font-family="DM Mono,monospace">SL</text>'
+    : '<text x="'+(PL+140)+'" y="'+ly+'" font-size="9" fill="rgba(255,255,255,.2)" font-family="DM Mono,monospace">Last '+N+' days</text>');
 
   return '<div style="background:var(--bg2);border-bottom:0.5px solid var(--border);overflow:hidden">'
     +'<svg width="100%" viewBox="0 0 '+W+' '+TH+'" preserveAspectRatio="none" style="display:block;height:280px">'
-    +grid+sep+cpLine+vv+cv
+    +grid+sep+slLine+cpLine+vv+cv
     +smaPath(s50,'#60a5fa')+smaPath(s200,'#fbbf24')
-    +cpLabel+legend+xLbls
+    +slLabel+cpLabel+legend+xLbls
     +'</svg></div>';
 }
 
@@ -1131,7 +1146,7 @@ function renderDetail(){
   var s = S.results[S.detail]; if(!s) return '<div class="empty">No data.</div>';
   var secLabel = SECTORS[s.sector] ? SECTORS[s.sector].label : (s.sector||'Index');
   return '<div class="back-row" onclick="S.detail=null;render()">← '+secLabel+'</div>'
-    + renderChart(s._candles)
+    + renderChart(s._candles, s.stopLoss)
     + buildStockBody(s);
 }
 
@@ -1180,7 +1195,7 @@ function renderAnalyze(){
       +'<div style="font-size:12px;color:var(--txt3)">Check the symbol and try again. Use NSE format (e.g. TCS, HDFCBANK, M&amp;M).</div>'
     +'</div>';
   } else if (res) {
-    body = renderChart(res._candles) + buildStockBody(res);
+    body = renderChart(res._candles, res.stopLoss) + buildStockBody(res);
   } else {
     // Empty state — quick-pick tiles
     var picks = ['TCS','RELIANCE','HDFCBANK','INFY','TATAMOTORS','SUNPHARMA','ITC','ADANIGREEN','BAJFINANCE','LT','WIPRO','AXISBANK'];
