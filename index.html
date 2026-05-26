@@ -19,20 +19,25 @@
 }
 html,body{height:100%;background:#000;}
 body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
+/* Mobile: single column, centred, max 430px */
 .app{width:100%;max-width:430px;min-height:100dvh;background:var(--bg);}
 .pb{padding-bottom:72px;}
+/* Sidebar hidden on mobile */
+.sidebar{display:none;}
+/* main-area fills the app shell on mobile */
+.main-area{width:100%;}
 
-/* ── Desktop sidebar layout ────────────────────────────── */
+/* ── Desktop layout (≥ 768px) ──────────────────────────── */
 @media(min-width:768px){
-  body{align-items:flex-start;}
-  .app{flex-direction:row;max-width:1440px;min-height:100dvh;}
-  .main-area{flex:1;min-width:0;display:flex;flex-direction:column;overflow-x:hidden;}
+  body{justify-content:flex-start;align-items:flex-start;}
+  /* App becomes a full-width flex row */
+  .app{display:flex;flex-direction:row;max-width:100%;width:100%;min-height:100dvh;}
   .pb{padding-bottom:24px;}
   /* Hide mobile chrome */
   .topbar{display:none;}
   .bottom-nav{display:none;}
   /* Sidebar */
-  .sidebar{display:flex!important;width:220px;min-width:220px;height:100dvh;position:sticky;top:0;border-right:0.5px solid var(--border);flex-direction:column;overflow-y:auto;background:var(--bg);}
+  .sidebar{display:flex;flex-direction:column;width:220px;min-width:220px;height:100dvh;position:sticky;top:0;border-right:0.5px solid var(--border);overflow-y:auto;background:var(--bg);flex-shrink:0;}
   .sb-brand{padding:22px 18px 18px;border-bottom:0.5px solid var(--border);}
   .sb-pill{display:flex;align-items:center;gap:8px;padding:11px 18px;border-bottom:0.5px solid var(--border);cursor:pointer;transition:background .15s;}
   .sb-pill:hover{background:var(--bg2);}
@@ -42,7 +47,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
   .sb-btn:hover{background:var(--bg2);color:var(--txt);}
   .sb-btn.active{background:rgba(61,255,160,.07);color:var(--accent);}
   .sb-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
-  .sb-regime{padding:14px 18px;border-top:0.5px solid var(--border);}
+  .sb-regime{padding:14px 18px;border-top:0.5px solid var(--border);margin-top:auto;}
+  /* Main area fills remaining width */
+  .main-area{flex:1;min-width:0;display:flex;flex-direction:column;overflow-x:hidden;}
   /* Stock card grid */
   .sig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0.5px;background:var(--border);}
   .sig-card{background:var(--bg);}
@@ -188,7 +195,7 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 <div class="app">
 
   <!-- ── Sidebar (desktop only) ─────────────────────────── -->
-  <div class="sidebar" id="sidebar" style="display:none">
+  <div class="sidebar" id="sidebar">
     <div class="sb-brand">
       <div class="brand-name">Nifty Scanner</div>
       <div style="font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;margin-top:3px">Momentum · Score/120</div>
