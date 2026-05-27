@@ -1979,12 +1979,20 @@ async function fetchDayData() {
 
   try {
     var res  = await fetch(url);
+    if (!res.ok) {
+      var errText = await res.text();
+      throw new Error('HTTP ' + res.status + ': ' + errText.slice(0, 120));
+    }
     var json = await res.json();
-    if (!json.ok) throw new Error(json.error || 'Failed');
+    if (!json.ok) throw new Error(json.error || 'Quote API returned error');
+    var count = Object.keys(json.quotes || {}).length;
+    if (count === 0) throw new Error('No quote data returned — market may be closed');
     S.day.quotes      = json.quotes || {};
     S.day.lastRefresh = istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST';
+    showToast('Loaded ' + count + ' quotes');
   } catch(e) {
     showToast('Quote fetch failed: ' + e.message);
+    console.error('fetchDayData error:', e);
   }
 
   S.day.loading = false;
