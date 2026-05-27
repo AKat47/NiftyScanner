@@ -150,6 +150,33 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .bt-win{color:#4ade80;}
 .bt-loss{color:#f87171;}
 .bt-open{color:var(--accent);}
+/* ── Day Trading ── */
+.dtc{background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rl);overflow:hidden;}
+.dtc-top{display:flex;align-items:flex-start;justify-content:space-between;padding:10px 12px;border-bottom:0.5px solid var(--border);}
+.dtc-sym{font-size:15px;font-weight:800;color:var(--txt);}
+.dtc-sub{font-size:10px;color:var(--txt3);margin-top:2px;}
+.dtc-gap{font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;font-family:'DM Mono',monospace;}
+.gap-up{background:rgba(74,222,128,.14);color:#4ade80;}
+.gap-dn{background:rgba(248,113,113,.14);color:#f87171;}
+.gap-flat{background:var(--bg3);color:var(--txt3);}
+.dtc-ltp-row{display:flex;align-items:baseline;gap:7px;padding:9px 12px 5px;}
+.dtc-ltp{font-size:19px;font-weight:800;color:var(--txt);}
+.dtc-chg{font-size:13px;font-weight:600;font-family:'DM Mono',monospace;}
+.dtc-levels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5px;background:var(--border);}
+.dtc-lv{background:var(--bg2);padding:7px 10px;}
+.dtc-lv-lbl{font-size:9px;color:var(--txt3);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.06em;}
+.dtc-lv-val{font-size:12px;font-weight:700;color:var(--txt2);font-family:'DM Mono',monospace;margin-top:2px;}
+.dtc-setup{padding:8px 12px;font-size:11px;color:var(--txt3);line-height:1.7;}
+.dtc-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;}
+.dtc-pill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;font-family:'DM Mono',monospace;}
+.pill-entry{background:rgba(96,165,250,.14);color:#60a5fa;}
+.pill-stop{background:rgba(248,113,113,.14);color:#f87171;}
+.pill-tgt{background:rgba(74,222,128,.14);color:#4ade80;}
+.dt-pulse{margin:12px 16px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;}
+.dt-pulse-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px;}
+.dt-pulse-lbl{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;}
+.dt-pulse-val{font-size:14px;font-weight:800;margin-top:2px;}
+.dt-filter-strip{display:flex;gap:8px;padding:10px 16px;overflow-x:auto;}
 .dp-header{padding:16px 16px 0;display:flex;align-items:flex-start;gap:12px;}
 .dp-badge{display:flex;flex-direction:column;align-items:center;justify-content:center;width:52px;height:52px;border-radius:12px;flex-shrink:0;}
 .dp-score{font-size:20px;font-weight:800;line-height:1;}
@@ -236,6 +263,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
       <button class="sb-btn active" id="sb-scanner" onclick="switchTab('scanner')">
         <span class="sb-icon">◈</span> Scanner
       </button>
+      <button class="sb-btn" id="sb-day" onclick="switchTab('day')">
+        <span class="sb-icon">⚡</span> Day Trading
+      </button>
       <button class="sb-btn" id="sb-analyze" onclick="switchTab('analyze')">
         <span class="sb-icon">⌕</span> Analyze
       </button>
@@ -273,6 +303,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
   <button class="bnav active" id="bnav-scanner" onclick="switchTab('scanner')">
     <div class="bnav-icon">◈</div><div class="bnav-lbl">Scanner</div>
   </button>
+  <button class="bnav" id="bnav-day" onclick="switchTab('day')">
+    <div class="bnav-icon">⚡</div><div class="bnav-lbl">Day</div>
+  </button>
   <button class="bnav" id="bnav-analyze" onclick="switchTab('analyze')">
     <div class="bnav-icon">⌕</div><div class="bnav-lbl">Analyze</div>
   </button>
@@ -308,6 +341,9 @@ var S = {
 
   // Backtest state
   btResult: null, // { symbol, data } once run
+
+  // Day Trading state
+  day: { loading: false, quotes: {}, lastRefresh: null, filter: 'all' },
 
   // Filter tab state
   filter: {
@@ -1720,13 +1756,247 @@ function renderSetup(){
   +'</div>';
 }
 
+// ── Day Trading ────────────────────────────────────────
+
+function istNow() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+}
+
+function isMarketOpen() {
+  var t = istNow();
+  var dow = t.getUTCDay(); // 0=Sun 6=Sat (in IST, since we added 5.5h)
+  if (dow === 0 || dow === 6) return false;
+  var mins = t.getUTCHours() * 60 + t.getUTCMinutes();
+  return mins >= 555 && mins <= 930; // 9:15–15:30 IST
+}
+
+function gapPct(q) {
+  if (!q || !q.open || !q.pdc) return 0;
+  return (q.open - q.pdc) / q.pdc * 100;
+}
+
+function daySetup(q, pdh, pdl) {
+  var ltp = q.ltp || q.open || 0;
+  var pdc = q.pdc || 0;
+  var gap = gapPct(q);
+
+  if (gap > 2.5) {
+    var stop = Math.max(q.open || pdc, pdc || 0);
+    var risk = ltp - stop;
+    return { type:'Gap Up Play', note:'Opening above yesterday\'s range. Buy on dips, trail above open.',
+      entry: ltp, stop: stop || null, target: risk > 0 ? ltp + 2*risk : null };
+  }
+  if (gap > 0.8) {
+    return { type:'Gap Up', note: pdh ? 'PDH ₹'+Math.round(pdh)+' now acts as support.' : 'Watch open-level as support.',
+      entry: pdh ? pdh + 0.5 : ltp, stop: pdc || null,
+      target: pdh && pdc ? pdh + (pdh - pdc) : null };
+  }
+  if (gap < -2.5) {
+    var stop2 = Math.min(q.open || pdc, pdc || 9999);
+    var risk2 = stop2 - ltp;
+    return { type:'Gap Down Play', note:'Opening below yesterday\'s range. Short on bounces, trail below open.',
+      entry: ltp, stop: stop2 || null, target: risk2 > 0 ? ltp - 2*risk2 : null };
+  }
+  if (gap < -0.8) {
+    return { type:'Gap Down', note: pdl ? 'PDL ₹'+Math.round(pdl)+' now acts as resistance.' : 'Watch open-level as resistance.',
+      entry: ltp, stop: pdc || null,
+      target: pdl && pdc ? pdl - (pdc - pdl) : null };
+  }
+  // Flat open — range play
+  return { type:'Inside Open', note: (pdh && pdl) ? 'Trade the breakout: above PDH ₹'+Math.round(pdh)+' or below PDL ₹'+Math.round(pdl)+'.' : 'Wait for directional move.',
+    entry: pdh || ltp, stop: pdl || null,
+    target: pdh && pdl ? pdh + (pdh - pdl) : null };
+}
+
+function renderDtCard(sym, q) {
+  var hist = S.results[sym];
+  var gap  = gapPct(q);
+  var gapCls = gap > 0.8 ? 'gap-up' : gap < -0.8 ? 'gap-dn' : 'gap-flat';
+  var gapStr = (gap >= 0 ? '+' : '') + gap.toFixed(2) + '% gap';
+  var ltpCol = (q.change >= 0) ? '#4ade80' : '#f87171';
+
+  // PDH / PDL from second-to-last candle in historical data
+  var candles = hist && hist._candles;
+  var pdh = candles && candles.length >= 2 ? +candles[candles.length-2][2] : null;
+  var pdl = candles && candles.length >= 2 ? +candles[candles.length-2][3] : null;
+  var pdc = q.pdc;
+
+  var setup = daySetup(q, pdh, pdl);
+  var volRatio = hist && hist.avgVol20 && q.volume
+    ? (q.volume / hist.avgVol20).toFixed(1) + '×' : null;
+
+  var pillsHtml = '';
+  if (setup.entry)  pillsHtml += '<span class="dtc-pill pill-entry">Entry ₹'+Math.round(setup.entry)+'</span>';
+  if (setup.stop)   pillsHtml += '<span class="dtc-pill pill-stop">Stop ₹'+Math.round(setup.stop)+'</span>';
+  if (setup.target) pillsHtml += '<span class="dtc-pill pill-tgt">Target ₹'+Math.round(setup.target)+'</span>';
+
+  return '<div class="dtc">'
+    // Top row
+    +'<div class="dtc-top">'
+      +'<div>'
+        +'<div class="dtc-sym">'+escHtml(sym)+'</div>'
+        +'<div class="dtc-sub">'
+          +(hist ? CLS_LABEL[hist.classification]+' · Score '+hist.score : '—')
+          +(volRatio ? ' · '+volRatio+' vol' : '')
+        +'</div>'
+      +'</div>'
+      +'<span class="dtc-gap '+gapCls+'">'+gapStr+'</span>'
+    +'</div>'
+    // LTP
+    +'<div class="dtc-ltp-row">'
+      +'<span class="dtc-ltp">₹'+fmt(q.ltp)+'</span>'
+      +'<span class="dtc-chg" style="color:'+ltpCol+'">'+(q.change>=0?'+':'')+q.change.toFixed(2)+'%</span>'
+      +'<span style="font-size:10px;color:var(--txt3);margin-left:auto;font-family:DM Mono,monospace">'+srcLabel(q.source)+'</span>'
+    +'</div>'
+    // Key levels
+    +'<div class="dtc-levels">'
+      +'<div class="dtc-lv"><div class="dtc-lv-lbl">PDH</div><div class="dtc-lv-val">'+(pdh?'₹'+Math.round(pdh):'—')+'</div></div>'
+      +'<div class="dtc-lv"><div class="dtc-lv-lbl">PDC</div><div class="dtc-lv-val">'+(pdc?'₹'+Math.round(pdc):'—')+'</div></div>'
+      +'<div class="dtc-lv"><div class="dtc-lv-lbl">PDL</div><div class="dtc-lv-val">'+(pdl?'₹'+Math.round(pdl):'—')+'</div></div>'
+    +'</div>'
+    // Setup
+    +'<div class="dtc-setup">'
+      +'<b style="color:var(--txt2)">'+setup.type+'</b> — '+setup.note
+      +(pillsHtml ? '<div class="dtc-pills">'+pillsHtml+'</div>' : '')
+    +'</div>'
+  +'</div>';
+}
+
+function renderDayTrading() {
+  var quotes   = S.day.quotes;
+  var loading  = S.day.loading;
+  var hasData  = Object.keys(quotes).length > 0;
+  var mktOpen  = isMarketOpen();
+  var t        = istNow();
+  var timeStr  = t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  var dateStr  = t.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+
+  // Header
+  var hdr = '<div style="padding:14px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:0.5px solid var(--border)">'
+    +'<div>'
+      +'<div style="font-size:18px;font-weight:800;color:var(--txt)">⚡ Day Trading</div>'
+      +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace;margin-top:3px">'
+        +dateStr+' · '+timeStr+' IST · '
+        +'<span style="color:'+(mktOpen?'#4ade80':'#f87171')+'">●</span> '
+        +(mktOpen?'Market open':'Market closed')
+      +'</div>'
+    +'</div>'
+    +'<button class="add-btn" onclick="fetchDayData()" '+(loading?'disabled':'')+' style="font-size:12px;padding:7px 14px">'
+      +(loading ? '…' : (hasData ? '⟳ Refresh' : 'Load quotes'))
+    +'</button>'
+  +'</div>';
+
+  if (loading) return hdr + '<div class="spinner-wrap"><div class="spinner"></div><div class="spin-txt">Fetching live quotes…</div></div>';
+
+  if (!hasData) {
+    return hdr + '<div class="splash">'
+      +'<div style="font-size:40px;margin-bottom:10px">⚡</div>'
+      +'<div class="splash-title">Load live market data</div>'
+      +'<div class="splash-sub">Pulls live LTP, day OHLC, and key levels for all scanned stocks.<br>'
+        +'Uses Kite Connect if connected, Yahoo Finance (15-min delay) otherwise.<br>'
+        +'Run the Scanner first to populate the watchlist.</div>'
+      +'<button class="add-btn" onclick="fetchDayData()" style="margin-top:16px;padding:10px 24px">Load quotes</button>'
+    +'</div>';
+  }
+
+  // Market pulse
+  var nq = quotes['NIFTY50'];
+  var allQ = Object.values(quotes).filter(Boolean);
+  var adv = allQ.filter(function(q){return q.change>0;}).length;
+  var dec = allQ.filter(function(q){return q.change<0;}).length;
+  var niftyCol = nq && nq.change >= 0 ? '#4ade80' : '#f87171';
+
+  var pulse = '<div class="dt-pulse">'
+    +'<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">Market pulse</div>'
+    +'<div class="dt-pulse-grid">'
+      +(nq ? '<div><div class="dt-pulse-lbl">Nifty 50</div>'
+          +'<div class="dt-pulse-val" style="color:'+niftyCol+'">'+fmt(nq.ltp)+'</div>'
+          +'<div style="font-size:11px;color:'+niftyCol+';font-family:DM Mono,monospace">'+(nq.change>=0?'+':'')+nq.change.toFixed(2)+'%</div>'
+        +'</div>' : '')
+      +'<div><div class="dt-pulse-lbl">Advances</div><div class="dt-pulse-val" style="color:#4ade80">'+adv+'</div></div>'
+      +'<div><div class="dt-pulse-lbl">Declines</div><div class="dt-pulse-val" style="color:#f87171">'+dec+'</div></div>'
+      +'<div><div class="dt-pulse-lbl">Refreshed</div><div style="font-size:11px;color:var(--txt3);margin-top:4px;font-family:DM Mono,monospace">'+(S.day.lastRefresh||'—')+'</div></div>'
+    +'</div>'
+  +'</div>';
+
+  // Filter strip
+  var filt = S.day.filter;
+  var filterStrip = '<div class="dt-filter-strip">'
+    +[['all','All'],['gapup','Gap Up'],['gapdn','Gap Down'],['vol','High Vol'],['momentum','Momentum']].map(function(f){
+      var active = filt === f[0];
+      return '<button onclick="S.day.filter=\''+f[0]+'\';render()" style="white-space:nowrap;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;flex-shrink:0;'
+        +(active?'background:var(--accent);color:#0d1117;border:none':'background:var(--bg2);color:var(--txt3);border:0.5px solid var(--border)')+'">'+f[1]+'</button>';
+    }).join('')
+  +'</div>';
+
+  // Collect & sort stocks
+  var syms = Object.keys(quotes).filter(function(s){ return s !== 'NIFTY50'; });
+  syms.sort(function(a,b){
+    return Math.abs(gapPct(quotes[b]||{})) - Math.abs(gapPct(quotes[a]||{}));
+  });
+
+  // Apply filter
+  syms = syms.filter(function(sym){
+    var q = quotes[sym]; if (!q) return false;
+    var g = gapPct(q);
+    if (filt === 'gapup')    return g > 0.8;
+    if (filt === 'gapdn')    return g < -0.8;
+    if (filt === 'vol')      { var h=S.results[sym]; return h && h.avgVol20 && q.volume && q.volume/h.avgVol20 >= 1.5; }
+    if (filt === 'momentum') { var h=S.results[sym]; return h && h.score >= 80; }
+    return true;
+  });
+
+  var listHdr = '<div style="padding:4px 16px 8px;font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">'
+    +(syms.length)+' setups · sorted by gap %</div>';
+
+  var cards = syms.length
+    ? '<div class="sig-grid">'+syms.map(function(sym){ return renderDtCard(sym, quotes[sym]); }).join('')+'</div>'
+    : '<div class="empty">No stocks match this filter.</div>';
+
+  return hdr + pulse + filterStrip + listHdr + cards + '<div style="height:28px"></div>';
+}
+
+async function fetchDayData() {
+  S.day.loading = true;
+  render();
+
+  // Gather scanned symbols (need _candles to have PDH/PDL from history)
+  var syms = ['NIFTY50'].concat(
+    Object.keys(S.results).filter(function(s){
+      return s !== 'NIFTY50' && S.results[s] && S.results[s]._candles;
+    })
+  );
+
+  if (syms.length <= 1) {
+    showToast('Run the Scanner first to build your watchlist');
+    S.day.loading = false; render(); return;
+  }
+
+  var kiteToken = S.sources.kite.connected && S.sources.kite.token ? S.sources.kite.token : null;
+  var url = '/api/quote?symbols=' + syms.join(',') + (kiteToken ? '&kiteToken=' + encodeURIComponent(kiteToken) : '');
+
+  try {
+    var res  = await fetch(url);
+    var json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Failed');
+    S.day.quotes      = json.quotes || {};
+    S.day.lastRefresh = istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST';
+  } catch(e) {
+    showToast('Quote fetch failed: ' + e.message);
+  }
+
+  S.day.loading = false;
+  render();
+}
+
 // ── Main render ────────────────────────────────────────
 function render(){
   var el=document.getElementById('content');
-  if(S.tab==='setup'){  el.innerHTML=renderSetup();  }
-  else if(S.tab==='filter'){ el.innerHTML=renderFilter(); }
-  else if(S.tab==='analyze'){ el.innerHTML=renderAnalyze(); }
-  else if(S.detail){    el.innerHTML=renderDetail(); }
+  if(S.tab==='setup'){     el.innerHTML=renderSetup();      }
+  else if(S.tab==='filter'){  el.innerHTML=renderFilter();     }
+  else if(S.tab==='analyze'){ el.innerHTML=renderAnalyze();    }
+  else if(S.tab==='day'){     el.innerHTML=renderDayTrading(); }
+  else if(S.detail){          el.innerHTML=renderDetail();     }
   else { el.innerHTML=renderScanner(); }
   updateSbRegime();
 }
