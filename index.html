@@ -398,30 +398,16 @@ function initKite() {
 }
 
 function fetchKiteToken() {
+  // No server-side /api/auth endpoint — mark Kite disconnected gracefully,
+  // then continue with Angel / Yahoo fallback chain (BUG-04 fix)
   S.authLoading = true; render();
-  fetch('/api/auth')
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      if (data.error) throw new Error(data.error);
-      S.sources.kite.connected = true;
-      S.sources.kite.token     = data.access_token;
-      S.sources.kite.userName  = data.user_name || '';
-      S.sources.kite.error     = null;
-      localStorage.setItem('kite_access_token', data.access_token);
-      localStorage.setItem('kite_token_date', new Date().toDateString());
-      localStorage.setItem('kite_user_name', data.user_name || '');
-    })
-    .catch(function(err){
-      S.sources.kite.connected = false;
-      S.sources.kite.error     = err.message;
-    })
-    .then(function(){
-      initAngel().then(function(){
-        S.authLoading = false;
-        updateConnPill(); render();
-        if (S.tab === 'scanner' && !S.scanning) scanAll();
-      });
-    });
+  S.sources.kite.connected = false;
+  S.sources.kite.error     = 'Manual token required — use Kite Connect login';
+  initAngel().then(function(){
+    S.authLoading = false;
+    updateConnPill(); render();
+    if (S.tab === 'scanner' && !S.scanning) scanAll();
+  });
 }
 
 function initAngel() {
@@ -623,7 +609,14 @@ function applyStrategy(raw, symbol, sector, source) {
   score = Math.min(score, 120);
 
   // Momentum Quality Score (0–100)
-  var mqs = (0.40*(rsPts/15) + 0.30*(adxPts/15) + 0.20*(volPts/15) + 0.10*(h52Pts/15)) * 100;
+  // If RS data is unavailable (NIFTY50 not yet scanned), redistribute RS weight
+  // so missing data doesn't artificially zero-out MQS (BUG-08 fix)
+  var mqs;
+  if (rs !== null) {
+    mqs = (0.40*(rsPts/15) + 0.30*(adxPts/15) + 0.20*(volPts/15) + 0.10*(h52Pts/15)) * 100;
+  } else {
+    mqs = (0.50*(adxPts/15) + 0.33*(volPts/15) + 0.17*(h52Pts/15)) * 100;
+  }
 
   // Classification
   var cls = score >= 90 ? 'elite' : score >= 80 ? 'strong' : score >= 70 ? 'emerging' : 'weak';
@@ -1414,11 +1407,11 @@ function renderDetailBt(s) {
       var cls = t.why==='Open' ? 'bt-open' : t.win ? 'bt-win' : 'bt-loss';
       var retStr = (t.ret>=0?'+':'')+t.ret.toFixed(1)+'%';
       return '<div class="bt-trade">'
-        +'<div>'
+        +'<div style="color:var(--txt2)">'
           +'<span style="color:var(--txt3)">In&nbsp; </span>'+dateStr(t.ed)+'<br>'
           +'<span style="color:var(--txt3)">Out </span>'+dateStr(t.xd)
         +'</div>'
-        +'<div>'
+        +'<div style="color:var(--txt2)">'
           +'₹'+Math.round(t.ep)+' → ₹'+Math.round(t.xp)+'<br>'
           +'<span style="color:var(--txt3)">'+t.days+'d · '+t.why+'</span>'
         +'</div>'
@@ -1686,6 +1679,14 @@ function renderFilter(){
       +cbRow('strong', 'Strong',  '80 – 89', 'var(--amber)', 'var(--amber-dim)')
       +cbRow('emerging','Emerging','70 – 79', 'var(--blue)',  'var(--blue-dim)')
       +cbRow('weak',   'Weak',    '< 70',    'var(--txt3)',  'rgba(255,255,255,.04)')
+    +'</div>'
+
+    // Reset filters button
+    +'<div class="setup-card setup-full" style="text-align:center">'
+      +'<button class="full-btn" style="margin:0" '
+        +'onclick="S.filter.minScore=0;S.filter.cls={elite:true,strong:true,emerging:true,weak:true};render()">'
+        +'↺ Reset all filters to defaults'
+      +'</button>'
     +'</div>'
 
     // Scoring legend
@@ -1960,17 +1961,18 @@ async function fetchDayData() {
   S.day.loading = true;
   render();
 
-  // Gather scanned symbols (need _candles to have PDH/PDL from history)
-  var syms = ['NIFTY50'].concat(
-    Object.keys(S.results).filter(function(s){
-      return s !== 'NIFTY50' && S.results[s] && S.results[s]._candles;
-    })
-  );
-
-  if (syms.length <= 1) {
-    showToast('Run the Scanner first to build your watchlist');
-    S.day.loading = false; render(); return;
-  }
+  // Gather scanned symbols; fall back to a default NSE watchlist so
+  // Load Quotes works even before the scanner has been run (BUG fix)
+  var scannedSyms = Object.keys(S.results).filter(function(s){
+    return s !== 'NIFTY50' && S.results[s] && S.results[s]._candles;
+  });
+  var DEFAULT_SYMS = [
+    'RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR',
+    'SBIN','BHARTIARTL','ITC','KOTAKBANK','LT','AXISBANK',
+    'BAJFINANCE','MARUTI','WIPRO','ONGC','NTPC','SUNPHARMA',
+    'TATAMOTORS','ADANIPORTS'
+  ];
+  var syms = ['NIFTY50'].concat(scannedSyms.length ? scannedSyms : DEFAULT_SYMS);
 
   var kiteToken = S.sources.kite.connected && S.sources.kite.token ? S.sources.kite.token : null;
   var url = '/api/quote?symbols=' + syms.join(',') + (kiteToken ? '&kiteToken=' + encodeURIComponent(kiteToken) : '');
