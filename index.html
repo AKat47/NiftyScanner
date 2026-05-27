@@ -275,6 +275,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
       <button class="sb-btn" id="sb-setup" onclick="switchTab('setup')">
         <span class="sb-icon">◧</span> Setup
       </button>
+      <button class="sb-btn" id="sb-paper" onclick="switchTab('paper')">
+        <span class="sb-icon">📋</span> Paper Trading
+      </button>
     </div>
     <div class="sb-regime" id="sbRegime"></div>
   </div>
@@ -315,6 +318,9 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
   <button class="bnav" id="bnav-setup" onclick="switchTab('setup')">
     <div class="bnav-icon">◧</div><div class="bnav-lbl">Setup</div>
   </button>
+  <button class="bnav" id="bnav-paper" onclick="switchTab('paper')">
+    <div class="bnav-icon">📋</div><div class="bnav-lbl">Paper</div>
+  </button>
 </div>
 
 <script>
@@ -349,6 +355,17 @@ var S = {
   filter: {
     minScore: 0,
     cls: { elite: true, strong: true, emerging: true, weak: true }
+  },
+
+  // Paper Trading state
+  paper: {
+    capital:    parseFloat(localStorage.getItem('paper_capital') || '500000'),
+    cash:       parseFloat(localStorage.getItem('paper_cash')    || '500000'),
+    positions:  JSON.parse(localStorage.getItem('paper_positions') || '[]'),
+    trades:     JSON.parse(localStorage.getItem('paper_trades')    || '[]'),
+    autoTrade:  localStorage.getItem('paper_auto') === '1',
+    riskPct:    1,
+    maxPos:     5
   }
 };
 
@@ -1860,6 +1877,13 @@ function renderDtCard(sym, q) {
       +'<b style="color:var(--txt2)">'+setup.type+'</b> — '+setup.note
       +(pillsHtml ? '<div class="dtc-pills">'+pillsHtml+'</div>' : '')
     +'</div>'
+    // Paper Trade buy button
+    +(setup.entry && setup.stop
+      ? '<div style="padding:8px 10px 10px">'
+          +'<button onclick="paperBuy(\''+escHtml(sym)+'\','+setup.entry+','+(setup.stop||0)+','+(setup.target||0)+',\''+setup.type+'\')" '
+            +'style="width:100%;padding:8px;border-radius:7px;border:0.5px solid var(--accent);background:rgba(61,255,160,.07);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:\'DM Mono\',monospace">📋 Paper Buy @ ₹'+Math.round(setup.entry)+'</button>'
+        +'</div>'
+      : '')
   +'</div>';
 }
 
@@ -1990,6 +2014,7 @@ async function fetchDayData() {
     S.day.quotes      = json.quotes || {};
     S.day.lastRefresh = istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST';
     showToast('Loaded ' + count + ' quotes');
+    paperAutoCheck(); // update positions + auto-enter if enabled
   } catch(e) {
     showToast('Quote fetch failed: ' + e.message);
     console.error('fetchDayData error:', e);
@@ -1999,13 +2024,274 @@ async function fetchDayData() {
   render();
 }
 
+// ── Paper Trading ──────────────────────────────────────
+
+function savePaper() {
+  localStorage.setItem('paper_cash',      S.paper.cash);
+  localStorage.setItem('paper_positions', JSON.stringify(S.paper.positions));
+  localStorage.setItem('paper_trades',    JSON.stringify(S.paper.trades));
+  localStorage.setItem('paper_auto',      S.paper.autoTrade ? '1' : '0');
+}
+
+function paperBuy(sym, entry, stop, target, setup) {
+  entry = +entry; stop = +stop; target = +target;
+  if (!entry || !stop || entry <= 0 || stop <= 0) { showToast('Invalid entry/stop for ' + sym); return; }
+  if (S.paper.positions.find(function(p){ return p.sym === sym; })) {
+    showToast(sym + ' already in portfolio'); return;
+  }
+  if (S.paper.positions.length >= S.paper.maxPos) {
+    showToast('Max ' + S.paper.maxPos + ' positions reached'); return;
+  }
+  var risk = entry - stop;
+  if (risk <= 0) { showToast('Stop must be below entry for ' + sym); return; }
+  var capitalRisk = S.paper.capital * (S.paper.riskPct / 100); // 1% of ₹5L = ₹5000
+  var qty = Math.max(1, Math.floor(capitalRisk / risk));
+  var cost = entry * qty;
+  if (cost > S.paper.cash) qty = Math.max(1, Math.floor(S.paper.cash * 0.9 / entry));
+  cost = entry * qty;
+  if (qty < 1 || cost > S.paper.cash) { showToast('Insufficient cash for ' + sym); return; }
+  S.paper.cash -= cost;
+  S.paper.positions.push({
+    id: Date.now(), sym: sym,
+    entry: entry, qty: qty, stop: stop, target: target || null,
+    setup: setup || 'Manual',
+    time: istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST',
+    ltp: entry
+  });
+  savePaper();
+  showToast('📋 Bought ' + qty + ' × ' + sym + ' @ ₹' + Math.round(entry));
+  if (S.tab === 'paper') render();
+}
+
+function paperClose(id, exitPrice, reason) {
+  var idx = S.paper.positions.findIndex(function(p){ return p.id === id; });
+  if (idx < 0) return;
+  var p = S.paper.positions[idx];
+  exitPrice = +exitPrice;
+  var pnl = (exitPrice - p.entry) * p.qty;
+  S.paper.cash += exitPrice * p.qty;
+  S.paper.trades.unshift({
+    id: p.id, sym: p.sym,
+    entry: p.entry, exit: exitPrice, qty: p.qty,
+    pnl: pnl, reason: reason,
+    entryTime: p.time,
+    exitTime: istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST'
+  });
+  S.paper.positions.splice(idx, 1);
+  savePaper();
+  var icon = pnl >= 0 ? '✅' : '🔴';
+  showToast(icon + ' Closed ' + p.sym + ' ' + (pnl>=0?'+':'') + '₹' + Math.round(Math.abs(pnl)) + ' (' + reason + ')');
+  render();
+}
+
+function paperAutoCheck() {
+  var quotes = S.day.quotes;
+
+  // 1. Update LTPs + auto-exit open positions
+  S.paper.positions.slice().forEach(function(pos) {
+    var q = quotes[pos.sym];
+    if (q && q.ltp) pos.ltp = q.ltp;
+    if (!S.paper.autoTrade) return;
+    if (pos.target && pos.ltp >= pos.target) {
+      paperClose(pos.id, pos.target, 'Target Hit');
+    } else if (pos.stop && pos.ltp <= pos.stop) {
+      paperClose(pos.id, pos.stop, 'Stop Loss');
+    }
+  });
+
+  // 2. Auto-enter — Gap Up Play >2.5% only
+  if (!S.paper.autoTrade) return;
+  Object.keys(quotes).forEach(function(sym) {
+    if (sym === 'NIFTY50') return;
+    if (S.paper.positions.length >= S.paper.maxPos) return;
+    if (S.paper.positions.find(function(p){ return p.sym === sym; })) return;
+    var q = quotes[sym];
+    if (!q || !q.ltp) return;
+    if (gapPct(q) <= 2.5) return; // Gap Up Play threshold
+    var hist = S.results[sym];
+    if (hist && hist.score < 60) return; // skip weak stocks
+    var candles = hist && hist._candles;
+    var pdh = candles && candles.length >= 2 ? +candles[candles.length-2][2] : null;
+    var pdl = candles && candles.length >= 2 ? +candles[candles.length-2][3] : null;
+    var setup = daySetup(q, pdh, pdl);
+    if (setup.type === 'Gap Up Play' && setup.entry && setup.stop) {
+      paperBuy(sym, setup.entry, setup.stop, setup.target, setup.type);
+    }
+  });
+}
+
+function renderPaperTrading() {
+  var p = S.paper;
+  var quotes = S.day.quotes;
+
+  // Compute P&L
+  var unrealPnl = 0;
+  p.positions.forEach(function(pos) {
+    var q = quotes[pos.sym];
+    if (q && q.ltp) pos.ltp = q.ltp;
+    unrealPnl += ((pos.ltp || pos.entry) - pos.entry) * pos.qty;
+  });
+  var realPnl = p.trades.reduce(function(s, t){ return s + t.pnl; }, 0);
+  var totalPnl = unrealPnl + realPnl;
+  var totalPnlPct = (totalPnl / p.capital * 100);
+  var portfolioVal = p.cash + p.positions.reduce(function(s, pos){ return s + (pos.ltp || pos.entry) * pos.qty; }, 0);
+
+  var g  = function(v){ return v >= 0 ? 'var(--green)' : 'var(--red)'; };
+  var gf = function(v){ return (v >= 0 ? '+' : '') + fmt(Math.abs(v)); };
+
+  // ── Header / portfolio summary
+  var header =
+    '<div style="padding:16px 16px 12px;background:var(--bg2);border-bottom:0.5px solid var(--border)">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">'
+        +'<div>'
+          +'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace;margin-bottom:2px">Paper Portfolio</div>'
+          +'<div style="font-size:24px;font-weight:700;color:var(--txt)">₹'+fmt(portfolioVal)+'</div>'
+          +'<div style="font-size:13px;font-weight:600;color:'+g(totalPnl)+';margin-top:2px">'
+            +(totalPnl>=0?'+':'')+'₹'+fmt(Math.abs(totalPnl))+' ('+totalPnlPct.toFixed(1)+'%)'
+          +'</div>'
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">'
+          +'<button onclick="S.paper.autoTrade=!S.paper.autoTrade;savePaper();render()" '
+            +'style="padding:7px 14px;border-radius:20px;border:1px solid '+(p.autoTrade?'var(--green)':'var(--border)')+';'
+              +'background:'+(p.autoTrade?'var(--green-dim)':'var(--bg3)')+';'
+              +'color:'+(p.autoTrade?'var(--green)':'var(--txt3)')+';'
+              +'font-size:12px;font-weight:700;cursor:pointer;font-family:\'DM Mono\',monospace">'
+            +(p.autoTrade?'⚡ Auto ON':'○ Auto OFF')+'</button>'
+          +(p.autoTrade
+            ?'<div style="font-size:10px;color:var(--green);text-align:right;font-family:DM Mono,monospace">Gap Up Play >&nbsp;2.5%</div>'
+            :'<div style="font-size:10px;color:var(--txt3);text-align:right;font-family:DM Mono,monospace">Refresh quotes<br>to trigger</div>')
+        +'</div>'
+      +'</div>'
+      // Stats row
+      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">'
+        +'<div style="background:var(--bg3);padding:10px;border-radius:var(--r)">'
+          +'<div style="font-size:9px;color:var(--txt3);font-family:DM Mono,monospace;margin-bottom:3px">CASH</div>'
+          +'<div style="font-size:13px;font-weight:700;color:var(--txt)">₹'+fmt(p.cash)+'</div>'
+        +'</div>'
+        +'<div style="background:var(--bg3);padding:10px;border-radius:var(--r)">'
+          +'<div style="font-size:9px;color:var(--txt3);font-family:DM Mono,monospace;margin-bottom:3px">UNREALISED</div>'
+          +'<div style="font-size:13px;font-weight:700;color:'+g(unrealPnl)+'">'+gf(unrealPnl)+'</div>'
+        +'</div>'
+        +'<div style="background:var(--bg3);padding:10px;border-radius:var(--r)">'
+          +'<div style="font-size:9px;color:var(--txt3);font-family:DM Mono,monospace;margin-bottom:3px">REALISED</div>'
+          +'<div style="font-size:13px;font-weight:700;color:'+g(realPnl)+'">'+gf(realPnl)+'</div>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+
+  // ── Open positions
+  var posHtml;
+  if (p.positions.length) {
+    posHtml = '<div style="padding:14px 16px 6px">'
+      +'<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">'
+        +'Open Positions ('+p.positions.length+'/'+p.maxPos+')'
+      +'</div></div>'
+      +p.positions.map(function(pos) {
+        var ltp = pos.ltp || pos.entry;
+        var pnl = (ltp - pos.entry) * pos.qty;
+        var pnlPct = ((ltp - pos.entry) / pos.entry) * 100;
+        var col = g(pnl);
+        return '<div style="margin:0 12px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rl);overflow:hidden">'
+          // Header row
+          +'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px">'
+            +'<div>'
+              +'<div style="font-size:16px;font-weight:700;color:var(--txt)">'+escHtml(pos.sym)+'</div>'
+              +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">'+pos.setup+' · '+pos.qty+' qty · '+pos.time+'</div>'
+            +'</div>'
+            +'<div style="text-align:right">'
+              +'<div style="font-size:17px;font-weight:700;color:'+col+'">'+(pnl>=0?'+':'')+'₹'+fmt(Math.abs(pnl))+'</div>'
+              +'<div style="font-size:11px;color:'+col+'">'+(pnlPct>=0?'+':'')+pnlPct.toFixed(2)+'%</div>'
+            +'</div>'
+          +'</div>'
+          // Data grid
+          +'<div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:0.5px solid var(--border)">'
+            +[
+              {l:'Entry', v:'₹'+Math.round(pos.entry), c:'var(--txt2)'},
+              {l:'LTP',   v:'₹'+fmt(ltp),              c:'var(--txt)'},
+              {l:'Stop',  v:pos.stop   ? '₹'+Math.round(pos.stop)   : '—', c:'var(--red)'},
+              {l:'Target',v:pos.target ? '₹'+Math.round(pos.target) : '—', c:'var(--green)'}
+            ].map(function(cell, i){
+              return '<div style="padding:8px 10px'+(i<3?';border-right:0.5px solid var(--border)':'')+'">'
+                +'<div style="font-size:9px;color:var(--txt3);font-family:DM Mono,monospace;margin-bottom:2px">'+cell.l+'</div>'
+                +'<div style="font-size:12px;font-weight:600;color:'+cell.c+'">'+cell.v+'</div>'
+              +'</div>';
+            }).join('')
+          +'</div>'
+          // Action buttons
+          +'<div style="display:flex;gap:8px;padding:8px 10px;border-top:0.5px solid var(--border)">'
+            +'<button onclick="paperClose('+pos.id+','+ltp+',\'Manual\')" '
+              +'style="flex:1;padding:7px;border-radius:7px;border:0.5px solid var(--border);background:var(--bg3);color:var(--txt2);font-size:12px;font-weight:600;cursor:pointer">Close @ ₹'+fmt(ltp)+'</button>'
+            +(pos.stop
+              ? '<button onclick="paperClose('+pos.id+','+pos.stop+',\'Stop Loss\')" '
+                  +'style="flex:1;padding:7px;border-radius:7px;border:0.5px solid var(--red);background:rgba(248,113,113,.08);color:var(--red);font-size:12px;font-weight:600;cursor:pointer">Hit SL ₹'+Math.round(pos.stop)+'</button>'
+              : '')
+            +(pos.target
+              ? '<button onclick="paperClose('+pos.id+','+pos.target+',\'Target Hit\')" '
+                  +'style="flex:1;padding:7px;border-radius:7px;border:0.5px solid var(--green);background:var(--green-dim);color:var(--green);font-size:12px;font-weight:600;cursor:pointer">Hit TP ₹'+Math.round(pos.target)+'</button>'
+              : '')
+          +'</div>'
+        +'</div>';
+      }).join('');
+  } else {
+    posHtml = '<div style="padding:24px 20px;text-align:center">'
+      +'<div style="font-size:32px;margin-bottom:10px">📋</div>'
+      +'<div style="font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:6px">No Open Positions</div>'
+      +'<div style="font-size:12px;color:var(--txt3);line-height:1.6">Go to ⚡ Day Trading, load quotes,<br>then tap <b style="color:var(--accent)">Paper Buy</b> on any setup.<br>Or enable <b style="color:var(--green)">Auto ON</b> to buy Gap Up Plays automatically.</div>'
+    +'</div>';
+  }
+
+  // ── Trade history
+  var tradesHtml = '';
+  if (p.trades.length) {
+    var wr = p.trades.filter(function(t){ return t.pnl > 0; }).length;
+    var wrPct = ((wr / p.trades.length) * 100).toFixed(0);
+    tradesHtml =
+      '<div style="padding:14px 16px 6px;border-top:0.5px solid var(--border)">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between">'
+          +'<div style="font-size:10px;font-weight:600;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">'
+            +'Trade History ('+p.trades.length+')'
+          +'</div>'
+          +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">'+wrPct+'% win rate</div>'
+        +'</div>'
+      +'</div>'
+      +p.trades.map(function(t) {
+        var col = g(t.pnl);
+        var icon = t.pnl >= 0 ? '✅' : '🔴';
+        return '<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:0.5px solid var(--border)">'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+icon+' '+escHtml(t.sym)+'</div>'
+            +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">₹'+Math.round(t.entry)+' → ₹'+Math.round(t.exit)+' · '+t.qty+' qty · '+t.reason+'</div>'
+            +'<div style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace">'+t.entryTime+' → '+t.exitTime+'</div>'
+          +'</div>'
+          +'<div style="text-align:right;margin-left:10px">'
+            +'<div style="font-size:15px;font-weight:700;color:'+col+'">'+(t.pnl>=0?'+':'')+'₹'+Math.round(Math.abs(t.pnl))+'</div>'
+            +'<div style="font-size:10px;color:'+col+'">'+((t.exit-t.entry)/t.entry*100).toFixed(1)+'%</div>'
+          +'</div>'
+        +'</div>';
+      }).join('');
+  }
+
+  // ── Footer actions
+  var footer =
+    '<div style="padding:12px 16px;border-top:0.5px solid var(--border);display:flex;gap:8px">'
+      +'<button onclick="switchTab(\'day\')" '
+        +'style="flex:1;padding:10px;border-radius:var(--r);border:0.5px solid var(--accent);background:rgba(61,255,160,.07);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">⚡ Day Trading</button>'
+      +'<button onclick="if(confirm(\'Reset all paper trades and portfolio? This cannot be undone.\')){'
+        +'S.paper.cash=S.paper.capital;S.paper.positions=[];S.paper.trades=[];savePaper();render();}" '
+        +'style="padding:10px 14px;border-radius:var(--r);border:0.5px solid var(--border);background:var(--bg3);color:var(--txt3);font-size:12px;cursor:pointer">↺ Reset</button>'
+    +'</div>';
+
+  return header + posHtml + tradesHtml + footer + '<div style="height:28px"></div>';
+}
+
 // ── Main render ────────────────────────────────────────
 function render(){
   var el=document.getElementById('content');
-  if(S.tab==='setup'){     el.innerHTML=renderSetup();      }
+  if(S.tab==='setup'){     el.innerHTML=renderSetup();        }
   else if(S.tab==='filter'){  el.innerHTML=renderFilter();     }
   else if(S.tab==='analyze'){ el.innerHTML=renderAnalyze();    }
   else if(S.tab==='day'){     el.innerHTML=renderDayTrading(); }
+  else if(S.tab==='paper'){   el.innerHTML=renderPaperTrading(); }
   else if(S.detail){          el.innerHTML=renderDetail();     }
   else { el.innerHTML=renderScanner(); }
   updateSbRegime();
