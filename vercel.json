@@ -5,6 +5,7 @@
     { "source": "/api/yahoo",       "destination": "/api/yahoo.js" },
     { "source": "/api/candles",     "destination": "/api/candles.js" },
     { "source": "/api/scan",        "destination": "/api/scan.js" },
-    { "source": "/api/quote",       "destination": "/api/quote.js" }
+    { "source": "/api/quote",       "destination": "/api/quote.js"    },
+    { "source": "/api/intraday",    "destination": "/api/intraday.js" }
   ]
 }
