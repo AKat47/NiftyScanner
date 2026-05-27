@@ -364,12 +364,15 @@ function _lwcBaseOpts(el, h) {
 // ── Main daily candlestick chart ───────────────────────
 function _lwcMain(el, d) {
   var raw = d.raw, stopLoss = d.stopLoss;
-  if (!raw || raw.length < 20 || !window.LightweightCharts) return null;
+  console.log('[LWC] _lwcMain called | el.clientWidth='+el.clientWidth+' el.offsetWidth='+el.offsetWidth+' raw='+raw.length);
+  if (!raw || raw.length < 20 || !window.LightweightCharts) { console.error('[LWC] _lwcMain guard failed'); return null; }
   var LC = window.LightweightCharts;
 
+  try {
   var opts = _lwcBaseOpts(el, 300);
   opts.rightPriceScale = { borderColor:'rgba(255,255,255,0.08)', scaleMargins:{ top:0.08, bottom:0.28 } };
   var chart = LC.createChart(el, opts);
+  console.log('[LWC] createChart OK, width used='+opts.width);
 
   // Candles — last 120
   var N = Math.min(120, raw.length), startIdx = raw.length - N;
@@ -421,7 +424,9 @@ function _lwcMain(el, d) {
   }
 
   chart.timeScale().fitContent();
+  console.log('[LWC] _lwcMain complete ✓');
   return chart;
+  } catch(e) { console.error('[LWC] _lwcMain ERROR:', e.message, e.stack); return null; }
 }
 
 // ── Backtest equity curve ──────────────────────────────
@@ -484,7 +489,14 @@ function _lwcOrb(el, d) {
 
 // Called after every render() — creates charts in their containers
 function initCharts() {
-  if (!window.LightweightCharts) return;
+  var mainEl = document.getElementById('lwc-main');
+  var eqEl   = document.getElementById('lwc-equity');
+  console.log('[LWC] initCharts fired | LWC='+!!window.LightweightCharts
+    +' | #lwc-main='+(mainEl?'found w='+mainEl.clientWidth:'MISSING')
+    +' | _chartData.main='+!!_chartData.main
+    +' | #lwc-equity='+(eqEl?'found':'MISSING')
+    +' | _chartData.equity='+!!_chartData.equity);
+  if (!window.LightweightCharts) { console.warn('[LWC] library not loaded — aborting'); return; }
   _lwcDestroy();
   var el, c;
 
@@ -1205,8 +1217,10 @@ function sigCard(s){
 
 /// ── Render: Price chart (LightweightCharts) ───────────
 function renderChart(raw, stopLoss) {
-  if (!raw || raw.length < 20) return '';
+  console.log('[LWC] renderChart called | raw='+(raw?raw.length:'null')+' stopLoss='+stopLoss);
+  if (!raw || raw.length < 20) { console.warn('[LWC] renderChart: not enough data, returning empty'); return ''; }
   _chartData.main = { raw: raw, stopLoss: stopLoss };
+  console.log('[LWC] renderChart: _chartData.main set, sample c[0]=', raw[0][0]);
   return '<div id="lwc-main" style="height:300px;background:var(--bg2);border-bottom:0.5px solid var(--border)"></div>';
 }
 
