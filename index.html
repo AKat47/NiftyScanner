@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Nifty Scanner</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -330,6 +331,169 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 </div>
 
 <script>
+// ── LightweightCharts chart manager ───────────────────
+var _chartData = {};   // keyed by chart id; holds data for initCharts()
+var _lwcInst   = [];   // active chart instances; destroyed on each render
+
+function _lwcDestroy() {
+  _lwcInst.forEach(function(c){ try{ c.remove(); }catch(e){} });
+  _lwcInst = [];
+}
+
+function _lwcBaseOpts(h) {
+  return {
+    autoSize: true,
+    height: h,
+    layout: {
+      background: { type: 'solid', color: 'transparent' },
+      textColor: 'rgba(232,237,233,0.4)'
+    },
+    grid: {
+      vertLines: { color: 'rgba(255,255,255,0.04)' },
+      horzLines: { color: 'rgba(255,255,255,0.04)' }
+    },
+    crosshair: { mode: 1 },
+    rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
+    timeScale: { borderColor: 'rgba(255,255,255,0.08)', timeVisible: true, secondsVisible: false },
+    handleScroll: true,
+    handleScale: true
+  };
+}
+
+// ── Main daily candlestick chart ───────────────────────
+function _lwcMain(el, d) {
+  var raw = d.raw, stopLoss = d.stopLoss;
+  if (!raw || raw.length < 20 || !window.LightweightCharts) return null;
+  var LC = window.LightweightCharts;
+
+  var opts = _lwcBaseOpts(300);
+  opts.rightPriceScale = { borderColor:'rgba(255,255,255,0.08)', scaleMargins:{ top:0.08, bottom:0.28 } };
+  var chart = LC.createChart(el, opts);
+
+  // Candles — last 120
+  var N = Math.min(120, raw.length), startIdx = raw.length - N;
+  var slice = raw.slice(-N);
+  var cs = chart.addCandlestickSeries({
+    upColor:'#4ade80', downColor:'#f87171',
+    borderUpColor:'#4ade80', borderDownColor:'#f87171',
+    wickUpColor:'#4ade80', wickDownColor:'#f87171'
+  });
+  cs.setData(slice.map(function(c){
+    return { time:c[0], open:+c[1], high:+c[2], low:+c[3], close:+c[4] };
+  }).filter(function(c){ return c.open>0; }));
+
+  // Volume histogram
+  var vs = chart.addHistogramSeries({ priceFormat:{ type:'volume' }, priceScaleId:'vol', color:'rgba(74,222,128,0.2)' });
+  chart.priceScale('vol').applyOptions({ scaleMargins:{ top:0.75, bottom:0 } });
+  vs.setData(slice.map(function(c){
+    return { time:c[0], value:+c[5]||0, color:(+c[4]>=(+c[1]))?'rgba(74,222,128,0.22)':'rgba(248,113,113,0.22)' };
+  }).filter(function(c){ return c.value>0; }));
+
+  // SMA50 / SMA200
+  var s50=[], s200=[];
+  for (var i=0; i<N; i++) {
+    var ri = startIdx+i;
+    if (ri>=49)  { var a=0; for(var j=ri-49;j<=ri;j++)  a+=+raw[j][4]; s50.push({time:raw[ri][0],value:a/50});  }
+    if (ri>=199) { var a=0; for(var j=ri-199;j<=ri;j++) a+=+raw[j][4]; s200.push({time:raw[ri][0],value:a/200}); }
+  }
+  if (s50.length) {
+    var l50 = chart.addLineSeries({ color:'#60a5fa', lineWidth:1.5, priceLineVisible:false, lastValueVisible:false, title:'SMA50' });
+    l50.setData(s50);
+  }
+  if (s200.length) {
+    var l200 = chart.addLineSeries({ color:'#fbbf24', lineWidth:1.5, priceLineVisible:false, lastValueVisible:false, title:'SMA200' });
+    l200.setData(s200);
+  }
+
+  // Entry line (last close)
+  var lastClose = +slice[slice.length-1][4];
+  cs.createPriceLine({ price:lastClose, color:'#3dffa0', lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'Entry' });
+
+  // Stop loss line
+  var slVal = stopLoss ? parseFloat(stopLoss) : null;
+  if (slVal && slVal > 0) {
+    cs.createPriceLine({ price:slVal, color:'#f87171', lineWidth:1, lineStyle:2, axisLabelVisible:true, title:'SL' });
+  }
+
+  chart.timeScale().fitContent();
+  return chart;
+}
+
+// ── Backtest equity curve ──────────────────────────────
+function _lwcEquity(el, d) {
+  var bt = d.bt;
+  if (!bt || bt.eq.length < 2 || !window.LightweightCharts) return null;
+  var LC = window.LightweightCharts;
+
+  var chart = LC.createChart(el, _lwcBaseOpts(150));
+  var endVal = bt.eq[bt.eq.length-1].v;
+  var lineCol = endVal >= 100 ? '#4ade80' : '#f87171';
+  var fillTop = endVal >= 100 ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.14)';
+  var fillBot = endVal >= 100 ? 'rgba(74,222,128,0.02)' : 'rgba(248,113,113,0.02)';
+
+  var eqSeries = chart.addAreaSeries({
+    lineColor: lineCol, topColor: fillTop, bottomColor: fillBot,
+    lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true,
+    title: 'Strategy'
+  });
+  eqSeries.setData(bt.eq.map(function(e){ return { time:e.d, value:+e.v.toFixed(2) }; }));
+
+  var bhEnd = +(100 + bt.bhRet).toFixed(2);
+  var bhSeries = chart.addLineSeries({ color:'rgba(255,255,255,0.22)', lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, title:'B&H' });
+  bhSeries.setData([{ time:bt.eq[0].d, value:100 }, { time:bt.eq[bt.eq.length-1].d, value:bhEnd }]);
+
+  eqSeries.createPriceLine({ price:100, color:'rgba(255,255,255,0.12)', lineWidth:1, lineStyle:0 });
+  chart.timeScale().fitContent();
+  return chart;
+}
+
+// ── ORB intraday mini chart ────────────────────────────
+function _lwcOrb(el, d) {
+  if (!d || !d.candles || !window.LightweightCharts) return null;
+  var LC = window.LightweightCharts;
+
+  var opts = _lwcBaseOpts(100);
+  opts.rightPriceScale = { visible:false };
+  opts.leftPriceScale  = { visible:false };
+  opts.timeScale        = { visible:false };
+  opts.crosshair        = { mode:0 };
+  opts.handleScroll     = false;
+  opts.handleScale      = false;
+  opts.grid             = { vertLines:{ visible:false }, horzLines:{ visible:false } };
+
+  var chart = LC.createChart(el, opts);
+  var cs = chart.addCandlestickSeries({
+    upColor:'#4ade80', downColor:'#f87171',
+    borderUpColor:'#4ade80', borderDownColor:'#f87171',
+    wickUpColor:'#4ade80', wickDownColor:'#f87171'
+  });
+  cs.setData(d.candles.map(function(c){ return { time:c.t, open:c.o, high:c.h, low:c.l, close:c.c }; }));
+  cs.createPriceLine({ price:d.orbH, color:'#4ade80', lineWidth:1, lineStyle:1, axisLabelVisible:false, title:'ORB H' });
+  cs.createPriceLine({ price:d.orbL, color:'#f87171', lineWidth:1, lineStyle:1, axisLabelVisible:false, title:'ORB L' });
+  if (d.ltp) cs.createPriceLine({ price:d.ltp, color:'#a78bfa', lineWidth:1.5, lineStyle:2, axisLabelVisible:false, title:'LTP' });
+  chart.timeScale().fitContent();
+  return chart;
+}
+
+// Called after every render() — creates charts in their containers
+function initCharts() {
+  if (!window.LightweightCharts) return;
+  _lwcDestroy();
+  var el, c;
+
+  el = document.getElementById('lwc-main');
+  if (el && _chartData.main)   { c = _lwcMain(el,   _chartData.main);   if(c) _lwcInst.push(c); }
+
+  el = document.getElementById('lwc-equity');
+  if (el && _chartData.equity) { c = _lwcEquity(el, _chartData.equity); if(c) _lwcInst.push(c); }
+
+  document.querySelectorAll('[id^="lwc-orb-"]').forEach(function(orbEl) {
+    var sym = orbEl.id.slice(8);
+    var od = _chartData['orb-'+sym];
+    if (od) { c = _lwcOrb(orbEl, od); if(c) _lwcInst.push(c); }
+  });
+}
+
 // ── State ──────────────────────────────────────────────
 var S = {
   tab:'scanner', activeSector:'IT', detail:null, detailTab:'backtest',
@@ -1022,143 +1186,11 @@ function sigCard(s){
     +'</div>';
 }
 
-// ── Render: Price chart (pure SVG) ────────────────────
+/// ── Render: Price chart (LightweightCharts) ───────────
 function renderChart(raw, stopLoss) {
   if (!raw || raw.length < 20) return '';
-
-  // Layout constants
-  var W=600, PH=200, VH=42, PL=52, PR=10, PT=16, GAP=8, XLBL=14, PB=4;
-  var TH = PT + PH + GAP + VH + XLBL + PB; // ≈ 300
-  var cw = W - PL - PR;
-
-  // Slice: show last 120 candles; keep full history for SMA computation
-  var N = Math.min(120, raw.length);
-  var slice = raw.slice(-N);
-  var startIdx = raw.length - N; // index in raw[] where display slice begins
-
-  // Compute SMA50 and SMA200 at each display position using full history
-  var s50 = [], s200 = [];
-  for (var i = 0; i < N; i++) {
-    var ri = startIdx + i;
-    if (ri >= 49) {
-      var a=0; for (var j=ri-49;j<=ri;j++) a+=+raw[j][4]; s50.push(a/50);
-    } else s50.push(null);
-    if (ri >= 199) {
-      var a=0; for (var j=ri-199;j<=ri;j++) a+=+raw[j][4]; s200.push(a/200);
-    } else s200.push(null);
-  }
-
-  var opens  = slice.map(function(c){return +c[1]||0;});
-  var highs  = slice.map(function(c){return +c[2]||0;});
-  var lows   = slice.map(function(c){return +c[3]||0;});
-  var closes = slice.map(function(c){return +c[4]||0;});
-  var vols   = slice.map(function(c){return +c[5]||0;});
-
-  // Price range — include SMA values so lines don't clip
-  var allP = highs.concat(lows)
-    .concat(s50.filter(function(v){return v!==null;}))
-    .concat(s200.filter(function(v){return v!==null;}));
-  var maxP = Math.max.apply(null,allP), minP = Math.min.apply(null,allP);
-  var pRng = (maxP-minP)||1;
-  maxP += pRng*0.04; minP -= pRng*0.04; pRng = maxP-minP;
-
-  var maxV = Math.max.apply(null,vols)||1;
-  var cpw  = cw/N;                            // width per candle column
-  var bw   = Math.max(1, Math.min(8, cpw*0.6)); // body width
-
-  function px(i) { return PL + (i+0.5)*cpw; }
-  function py(p)  { return PT + PH - ((p-minP)/pRng)*PH; }
-  function vy(v)  { return PT+PH+GAP+VH - (v/maxV)*VH; }
-  function fp(p)  { return p>=1000 ? Math.round(p) : p.toFixed(p<10?2:0); }
-
-  // ── Candles ──────────────────────────────────────────
-  var cv = '';
-  for (var i=0;i<N;i++) {
-    var o=opens[i],h=highs[i],l=lows[i],c=closes[i];
-    if (!h||!l) continue;
-    var up = c>=o, col = up?'#4ade80':'#f87171';
-    var x=px(i), bTop=py(Math.max(o,c)), bBot=py(Math.min(o,c)), bH=Math.max(1,bBot-bTop);
-    cv += '<line x1="'+x.toFixed(1)+'" y1="'+py(h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+py(l).toFixed(1)+'" stroke="'+col+'" stroke-width="0.8" opacity="0.45"/>';
-    cv += '<rect x="'+(x-bw/2).toFixed(1)+'" y="'+bTop.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bH.toFixed(1)+'" fill="'+col+'" opacity="'+(up?'0.72':'0.88')+'"/>';
-  }
-
-  // ── Volume bars ──────────────────────────────────────
-  var vBase = PT+PH+GAP+VH;
-  var vv = '';
-  for (var i=0;i<N;i++) {
-    if (!vols[i]) continue;
-    var x=px(i), top=vy(vols[i]), up=closes[i]>=opens[i];
-    vv += '<rect x="'+(x-bw/2).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(vBase-top).toFixed(1)+'" fill="'+(up?'rgba(74,222,128,.28)':'rgba(248,113,113,.28)')+'"/>';
-  }
-
-  // ── SMA path (handles null gaps) ────────────────────
-  function smaPath(arr, col) {
-    var d='', open=false;
-    for (var i=0;i<arr.length;i++) {
-      if (arr[i]===null){open=false;continue;}
-      var pt=px(i).toFixed(1)+','+py(arr[i]).toFixed(1);
-      d += (open?' L':' M')+pt; open=true;
-    }
-    return d ? '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linejoin="round" opacity="0.9"/>' : '';
-  }
-
-  // ── Grid lines + Y-axis labels ───────────────────────
-  var grid='';
-  for (var i=0;i<=4;i++) {
-    var p=minP+pRng*i/4, y=py(p).toFixed(1);
-    grid += '<line x1="'+PL+'" y1="'+y+'" x2="'+(PL+cw)+'" y2="'+y+'" stroke="rgba(255,255,255,.04)" stroke-width="0.5"/>';
-    grid += '<text x="'+(PL-5)+'" y="'+(+y+3.5)+'" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,.28)" font-family="DM Mono,monospace">'+fp(p)+'</text>';
-  }
-
-  // ── Entry (current price) dashed line ────────────────
-  var entryPrice = closes[N-1];
-  var cpY = py(entryPrice).toFixed(1);
-  var cpLine = '<line x1="'+PL+'" y1="'+cpY+'" x2="'+(PL+cw)+'" y2="'+cpY+'" stroke="#3dffa0" stroke-width="0.9" stroke-dasharray="4,4" opacity="0.65"/>';
-  var cpLabel = '<rect x="'+(PL+cw-44)+'" y="'+(+cpY-8)+'" width="44" height="12" rx="3" fill="rgba(61,255,160,.12)"/>'
-    + '<text x="'+(PL+cw-4)+'" y="'+(+cpY+3)+'" text-anchor="end" font-size="8" fill="#3dffa0" font-family="DM Mono,monospace">↑ '+fp(entryPrice)+'</text>';
-
-  // ── Stop-loss dashed line ─────────────────────────────
-  var slLine = '', slLabel = '';
-  var slVal = stopLoss ? parseFloat(stopLoss) : null;
-  if (slVal && slVal > minP && slVal < maxP) {
-    var slY = py(slVal).toFixed(1);
-    slLine  = '<line x1="'+PL+'" y1="'+slY+'" x2="'+(PL+cw)+'" y2="'+slY+'" stroke="#f87171" stroke-width="0.9" stroke-dasharray="3,3" opacity="0.7"/>';
-    slLabel = '<rect x="'+(PL+cw-44)+'" y="'+(+slY-8)+'" width="44" height="12" rx="3" fill="rgba(248,113,113,.1)"/>'
-      + '<text x="'+(PL+cw-4)+'" y="'+(+slY+3)+'" text-anchor="end" font-size="8" fill="#f87171" font-family="DM Mono,monospace">↓ '+fp(slVal)+'</text>';
-  }
-
-  // ── X-axis month labels ──────────────────────────────
-  var xLbls='', MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var xStep = Math.max(10, Math.floor(N/6));
-  for (var i=0;i<N;i+=xStep) {
-    try {
-      var dt=new Date(slice[i][0]);
-      var lbl=MONTHS[dt.getUTCMonth()]+(i===0||dt.getUTCMonth()===0?' '+dt.getUTCFullYear()%100:'');
-      xLbls+='<text x="'+px(i).toFixed(1)+'" y="'+(PT+PH+GAP+VH+XLBL-1)+'" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.2)" font-family="DM Mono,monospace">'+lbl+'</text>';
-    } catch(e){}
-  }
-
-  // ── Separator line between price & volume ────────────
-  var sep='<line x1="'+PL+'" y1="'+(PT+PH+GAP/2)+'" x2="'+(PL+cw)+'" y2="'+(PT+PH+GAP/2)+'" stroke="rgba(255,255,255,.07)" stroke-width="0.5"/>';
-
-  // ── Legend ───────────────────────────────────────────
-  var ly=PT+12;
-  var legend='<rect x="'+PL+'" y="'+(ly-5)+'" width="14" height="2" rx="1" fill="#60a5fa"/>'
-    +'<text x="'+(PL+18)+'" y="'+ly+'" font-size="9" fill="#60a5fa" font-family="DM Mono,monospace">SMA50</text>'
-    +'<rect x="'+(PL+60)+'" y="'+(ly-5)+'" width="14" height="2" rx="1" fill="#fbbf24"/>'
-    +'<text x="'+(PL+78)+'" y="'+ly+'" font-size="9" fill="#fbbf24" font-family="DM Mono,monospace">SMA200</text>'
-    +(slVal ? '<line x1="'+(PL+140)+'" y1="'+(ly-2)+'" x2="'+(PL+154)+'" y2="'+(ly-2)+'" stroke="#3dffa0" stroke-width="1.5" stroke-dasharray="3,2"/>'
-           +'<text x="'+(PL+158)+'" y="'+ly+'" font-size="9" fill="#3dffa0" font-family="DM Mono,monospace">Entry</text>'
-           +'<line x1="'+(PL+192)+'" y1="'+(ly-2)+'" x2="'+(PL+206)+'" y2="'+(ly-2)+'" stroke="#f87171" stroke-width="1.5" stroke-dasharray="3,2"/>'
-           +'<text x="'+(PL+210)+'" y="'+ly+'" font-size="9" fill="#f87171" font-family="DM Mono,monospace">SL</text>'
-    : '<text x="'+(PL+140)+'" y="'+ly+'" font-size="9" fill="rgba(255,255,255,.2)" font-family="DM Mono,monospace">Last '+N+' days</text>');
-
-  return '<div style="background:var(--bg2);border-bottom:0.5px solid var(--border);overflow:hidden">'
-    +'<svg width="100%" viewBox="0 0 '+W+' '+TH+'" preserveAspectRatio="none" style="display:block;height:280px">'
-    +grid+sep+slLine+cpLine+vv+cv
-    +smaPath(s50,'#60a5fa')+smaPath(s200,'#fbbf24')
-    +slLabel+cpLabel+legend+xLbls
-    +'</svg></div>';
+  _chartData.main = { raw: raw, stopLoss: stopLoss };
+  return '<div id="lwc-main" style="height:300px;background:var(--bg2);border-bottom:0.5px solid var(--border)"></div>';
 }
 
 // ── Shared: build score rows + metrics for any result ──
@@ -1321,40 +1353,11 @@ function runBacktest(symbol) {
 
 function btSlice(raw,i){return raw.slice(0,i+1);}
 
-// Equity curve SVG
+// Equity curve (LightweightCharts)
 function renderBtEquity(bt) {
-  if(!bt||bt.eq.length<2)return '';
-  var W=560,H=120,PL=8,PR=8,PT=8,PB=8;
-  var cw=W-PL-PR,ch=H-PT-PB;
-  var vals=bt.eq.map(function(e){return e.v;});
-  // buy-and-hold reference line
-  var bhEnd=100+bt.bhRet, bhVals=[100,bhEnd];
-  var allV=vals.concat(bhVals);
-  var minV=Math.min.apply(null,allV),maxV=Math.max.apply(null,allV);
-  var rng=(maxV-minV)||1; minV-=rng*0.05; maxV+=rng*0.05; rng=maxV-minV;
-  function px(i,tot){return PL+i/(tot-1)*cw;}
-  function py(v){return PT+ch-(v-minV)/rng*ch;}
-  // Strategy path
-  var sd='M'+px(0,vals.length).toFixed(1)+','+py(vals[0]).toFixed(1);
-  for(var i=1;i<vals.length;i++)sd+=' L'+px(i,vals.length).toFixed(1)+','+py(vals[i]).toFixed(1);
-  // B&H path (straight line from start to end)
-  var bPath='M'+PL.toFixed(1)+','+py(100).toFixed(1)+' L'+(PL+cw).toFixed(1)+','+py(bhEnd).toFixed(1);
-  // Zero line at 100
-  var zy=py(100).toFixed(1);
-  var zline=(zy>PT&&zy<PT+ch)?'<line x1="'+PL+'" y1="'+zy+'" x2="'+(PL+cw)+'" y2="'+zy+'" stroke="rgba(255,255,255,.08)" stroke-width="0.5"/>':'';
-  // Fill area under strategy curve
-  var fill=sd+' L'+(PL+cw).toFixed(1)+','+(PT+ch)+' L'+PL+','+(PT+ch)+' Z';
-  var endVal=vals[vals.length-1];
-  var fillCol=endVal>=100?'rgba(74,222,128,.1)':'rgba(248,113,113,.1)';
-  var lineCol=endVal>=100?'#4ade80':'#f87171';
-  return '<div style="padding:0 2px"><svg width="100%" viewBox="0 0 '+W+' '+H+'" style="display:block;height:120px" preserveAspectRatio="none">'
-    +zline
-    +'<path d="'+fill+'" fill="'+fillCol+'"/>'
-    +'<path d="'+bPath+'" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="4,3"/>'
-    +'<path d="'+sd+'" fill="none" stroke="'+lineCol+'" stroke-width="1.5" stroke-linejoin="round"/>'
-    +'<text x="'+(PL+cw-2)+'" y="'+(PT+8)+'" text-anchor="end" font-size="9" fill="'+lineCol+'" font-family="DM Mono,monospace">Strategy '+endVal.toFixed(1)+'</text>'
-    +'<text x="'+(PL+cw-2)+'" y="'+(PT+19)+'" text-anchor="end" font-size="9" fill="rgba(255,255,255,.3)" font-family="DM Mono,monospace">B&H '+(100+bt.bhRet).toFixed(1)+'</text>'
-    +'</svg></div>';
+  if (!bt || bt.eq.length < 2) return '';
+  _chartData.equity = { bt: bt };
+  return '<div id="lwc-equity" style="height:150px;background:var(--bg2);margin:0 2px"></div>';
 }
 
 // Full backtest results section
@@ -2127,50 +2130,11 @@ function orbSignal(d, score) {
   };
 }
 
-// ── ORB mini chart (SVG) ───────────────────────────────
-function renderOrbChart(candles, orbH, orbL, ltp) {
-  if (!candles || candles.length < 2) return '';
-  var W = 300, H = 80, PAD = 4;
-  var allH = candles.map(function(c){ return c.h; }).concat([orbH, ltp]);
-  var allL = candles.map(function(c){ return c.l; }).concat([orbL, ltp]);
-  var hi = Math.max.apply(null, allH);
-  var lo = Math.min.apply(null, allL);
-  var range = hi - lo || 1;
-  var yscale = (H - PAD*2) / range;
-  var bw = Math.max(3, Math.floor((W - PAD*2) / candles.length) - 1);
-  var gap = Math.floor((W - PAD*2) / candles.length);
-
-  function py(v) { return PAD + (hi - v) * yscale; }
-
-  var orbYH = py(orbH), orbYL = py(orbL);
-
-  // Candles
-  var bars = candles.map(function(c, i) {
-    var x  = PAD + i * gap + gap/2;
-    var yH = py(c.h), yL = py(c.l);
-    var yO = py(c.o), yC = py(c.c);
-    var top = Math.min(yO,yC), bot = Math.max(yO,yC);
-    var bodyH = Math.max(1, bot - top);
-    var col = c.c >= c.o ? '#4ade80' : '#f87171';
-    return '<line x1="'+x+'" y1="'+yH+'" x2="'+x+'" y2="'+yL+'" stroke="'+col+'" stroke-width="1" opacity="0.5"/>'
-          +'<rect x="'+(x-bw/2)+'" y="'+top+'" width="'+bw+'" height="'+bodyH+'" fill="'+col+'"/>';
-  }).join('');
-
-  // ORB band fill
-  var orbBand = '<rect x="'+PAD+'" y="'+orbYH+'" width="'+(W-PAD*2)+'" height="'+(orbYL-orbYH)+'" fill="rgba(61,255,160,0.04)" />';
-
-  // ORB lines
-  var orbLines =
-    '<line x1="'+PAD+'" y1="'+orbYH+'" x2="'+(W-PAD)+'" y2="'+orbYH+'" stroke="#4ade80" stroke-width="1" stroke-dasharray="3,3"/>'
-   +'<line x1="'+PAD+'" y1="'+orbYL+'" x2="'+(W-PAD)+'" y2="'+orbYL+'" stroke="#f87171" stroke-width="1" stroke-dasharray="3,3"/>';
-
-  // LTP line
-  var ltpY = py(ltp);
-  var ltpLine = '<line x1="'+PAD+'" y1="'+ltpY+'" x2="'+(W-PAD)+'" y2="'+ltpY+'" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,2"/>';
-
-  return '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:80px;display:block">'
-    + orbBand + bars + orbLines + ltpLine
-    +'</svg>';
+// ── ORB intraday mini chart (LightweightCharts) ────────
+function renderOrbChart(d, sym) {
+  if (!d || !d.candles || d.candles.length < 2) return '';
+  _chartData['orb-' + sym] = d;
+  return '<div id="lwc-orb-' + sym + '" style="height:100px;background:var(--bg2)"></div>';
 }
 
 // ── Strategy card ──────────────────────────────────────
@@ -2216,7 +2180,7 @@ function renderStrategyCard(sym, d) {
     +'</div>'
     // Mini chart
     +'<div style="padding:0 8px 4px">'
-      + renderOrbChart(d.candles, d.orbH, d.orbL, d.ltp)
+      + renderOrbChart(d, sym)
     +'</div>'
     // ORB + price levels grid
     +'<div style="display:grid;grid-template-columns:repeat(5,1fr);border-top:0.5px solid var(--border)">'
@@ -2664,6 +2628,8 @@ function render(){
   else if(S.detail){            el.innerHTML=renderDetail();       }
   else { el.innerHTML=renderScanner(); }
   updateSbRegime();
+  // Initialise LightweightCharts into any containers the current page rendered
+  setTimeout(initCharts, 0);
 }
 
 // ── Boot ───────────────────────────────────────────────
