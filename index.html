@@ -820,6 +820,44 @@ function applyStrategy(raw, symbol, sector, source) {
   var volContr = !!(atrPrev && atrVal && atrVal < atrPrev) || !!(vol20 && vol50 && vol20 < vol50);
   if (volContr) score += 5;
 
+  // ── Penalties ───────────────────────────────────────────
+  // RSI overbought (-10)
+  var rsiPenalty = !!(rsiVal && rsiVal > 80);
+  if (rsiPenalty) score -= 10;
+
+  // Wide-range exhaustion candle (-10): last bar is bearish, body > 1.5× avg 20-bar body, price below SMA50
+  var wrePenalty = false;
+  if (raw.length >= 21) {
+    var lastC = raw[raw.length-1];
+    var lastBody = Math.abs(+lastC[4] - +lastC[1]);
+    var avgBody20 = 0;
+    for (var bi = raw.length-21; bi < raw.length-1; bi++) avgBody20 += Math.abs(+raw[bi][4] - +raw[bi][1]);
+    avgBody20 /= 20;
+    if (avgBody20 > 0 && lastBody > avgBody20 * 1.5 && +lastC[4] < +lastC[1] && s50 && close < s50) wrePenalty = true;
+  }
+  if (wrePenalty) score -= 10;
+
+  // High delivery selling (-10): last 3 bars all bearish AND avg volume > 1.5× avgVol20
+  var delivPenalty = false;
+  if (raw.length >= 3 && avgVol20) {
+    var last3 = raw.slice(-3);
+    var allBear3 = last3.every(function(c){ return +c[4] < +c[1]; });
+    var avgVol3  = (+last3[0][5] + +last3[1][5] + +last3[2][5]) / 3;
+    if (allBear3 && avgVol3 > avgVol20 * 1.5) delivPenalty = true;
+  }
+  if (delivPenalty) score -= 10;
+
+  // Recent earnings miss proxy (-20): gap-down >3% in last 60 bars, price still below pre-gap level
+  var earnPenalty = false;
+  if (raw.length >= 2) {
+    var lb60 = raw.slice(-61);
+    for (var ei = 1; ei < lb60.length; ei++) {
+      var pc60 = +lb60[ei-1][4], go60 = +lb60[ei][1];
+      if (pc60 > 0 && go60 < pc60 * 0.97 && close < pc60) { earnPenalty = true; break; }
+    }
+  }
+  if (earnPenalty) score -= 20;
+
   score = Math.min(score, 120);
 
   // Momentum Quality Score (0–100)
@@ -859,6 +897,7 @@ function applyStrategy(raw, symbol, sector, source) {
     trendOk, price50Ok, price200Ok, rsiOk, adxOk, volContr,
     adxPts, rsPts, volPts, h52Pts,
     score, mqs: mqs.toFixed(1), classification: cls, signal, stopLoss,
+    rsiPenalty, wrePenalty, delivPenalty, earnPenalty,
     passCount: score, totalActive: 120
   };
 }
@@ -1228,6 +1267,12 @@ function buildStockBody(s) {
     {label:'At 52W high bonus',        pts:5,  earned:s.hi52pct&&+s.hi52pct>=100?5:0,         val:''},
     {label:'Volatility contraction',   pts:5,  earned:s.volContr?5:0,                         val:s.vol20&&s.vol50?Number(s.vol20).toFixed(1)+'% / '+Number(s.vol50).toFixed(1)+'%':'—'},
   ];
+  var penaltyRows = [
+    {label:'RSI > 80 (overbought)',          pts:-10, earned:s.rsiPenalty?-10:0,  val:s.rsiVal?'RSI '+Number(s.rsiVal).toFixed(1):'—'},
+    {label:'Recent earnings miss (proxy)',   pts:-20, earned:s.earnPenalty?-20:0, val:''},
+    {label:'High delivery selling',          pts:-10, earned:s.delivPenalty?-10:0,val:''},
+    {label:'Wide-range exhaustion candle',   pts:-10, earned:s.wrePenalty?-10:0,  val:''},
+  ];
   var scoreRowsHtml = scoreRows.map(function(r){
     var pass = r.earned > 0;
     return '<div class="cond-row">'
@@ -1236,6 +1281,17 @@ function buildStockBody(s) {
       +'<div style="display:flex;gap:8px;align-items:center">'
         +(r.val?'<span style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace">'+r.val+'</span>':'')
         +'<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;color:'+(pass?'var(--green)':'var(--txt3)')+'">+'+r.earned+'</span>'
+      +'</div></div>';
+  }).join('')
+  +'<div style="padding:6px 0 3px;margin-top:4px;border-top:0.5px solid var(--border);font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:.5px;text-transform:uppercase">Penalties</div>'
+  +penaltyRows.map(function(r){
+    var hit = r.earned < 0;
+    return '<div class="cond-row">'
+      +'<div class="cond-left"><div class="cond-check '+(hit?'fail':'pass')+'">'+(hit?'✗':'✓')+'</div>'
+      +'<span class="cond-name">'+r.label+'</span></div>'
+      +'<div style="display:flex;gap:8px;align-items:center">'
+        +(r.val?'<span style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace">'+r.val+'</span>':'')
+        +'<span style="font-size:11px;font-weight:700;font-family:DM Mono,monospace;color:'+(hit?'var(--red)':'var(--txt3)')+'">'+r.earned+'</span>'
       +'</div></div>';
   }).join('');
 
@@ -1711,6 +1767,19 @@ function renderFilter(){
             +'padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px">'
             +'<span style="color:var(--txt3)">'+r[0]+'</span>'
             +'<span style="font-family:DM Mono,monospace;font-weight:600;color:var(--green);white-space:nowrap;margin-left:8px">'+r[1]+'</span>'
+            +'</div>';
+        }).join('')
+        +'<div style="padding:6px 0 3px;margin-top:4px;border-top:0.5px solid var(--border);font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:.5px;text-transform:uppercase">Penalties</div>'
+        +[
+          ['RSI > 80 (overbought)',         '−10'],
+          ['Recent earnings miss (proxy)',  '−20'],
+          ['High delivery selling',         '−10'],
+          ['Wide-range exhaustion candle',  '−10'],
+        ].map(function(r){
+          return '<div style="display:flex;justify-content:space-between;align-items:baseline;'
+            +'padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px">'
+            +'<span style="color:var(--txt3)">'+r[0]+'</span>'
+            +'<span style="font-family:DM Mono,monospace;font-weight:600;color:var(--red);white-space:nowrap;margin-left:8px">'+r[1]+'</span>'
             +'</div>';
         }).join('')
         +'<div style="display:flex;justify-content:space-between;padding:7px 0 0;font-size:12px;font-weight:700">'
