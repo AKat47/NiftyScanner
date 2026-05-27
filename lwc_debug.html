@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LWC Debug</title>
+<!-- Local copy of lightweight-charts v4.2.3 — no CDN dependency -->
+<script src="./lightweight-charts.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d100e; color: #e8ede9; font-family: monospace; padding: 16px; }
+h2 { color: #60a5fa; margin-bottom: 12px; font-size: 15px; letter-spacing: .5px; }
+.section { margin-bottom: 20px; }
+.label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
+#lwc-main   { height: 300px; background: #141716; border: 1px solid #2a2e2c; }
+#lwc-equity { height: 150px; background: #141716; border: 1px solid #2a2e2c; }
+#lwc-orb    { height: 100px; background: #141716; border: 1px solid #2a2e2c; }
+#log {
+  margin-top: 20px; padding: 12px; background: #141716;
+  border: 1px solid #2a2e2c; font-size: 12px; line-height: 1.7;
+  white-space: pre; max-height: 400px; overflow-y: auto;
+}
+.ok  { color: #4ade80; }
+.err { color: #f87171; font-weight: bold; }
+.dim { color: #6b7280; }
+</style>
+</head>
+<body>
+<h2>NiftyScanner — LWC v4.2.3 Debug (local bundle)</h2>
+
+<div class="section">
+  <div class="label">① Daily candlestick + volume (300 px)</div>
+  <div id="lwc-main"></div>
+</div>
+<div class="section">
+  <div class="label">② Equity curve (150 px)</div>
+  <div id="lwc-equity"></div>
+</div>
+<div class="section">
+  <div class="label">③ ORB intraday mini (100 px)</div>
+  <div id="lwc-orb"></div>
+</div>
+
+<div id="log"></div>
+
+<script>
+// ── Logging ───────────────────────────────────────────────────────────
+var logEl = document.getElementById('log');
+function L(msg, cls) {
+  var s = document.createElement('span');
+  if (cls) s.className = cls;
+  s.textContent = msg + '\n';
+  logEl.appendChild(s);
+  console.log(msg);
+}
+function OK(msg) { L('✓ ' + msg, 'ok'); }
+function ERR(msg) { L('✗ ' + msg, 'err'); }
+function DIM(msg) { L('  ' + msg, 'dim'); }
+
+// ── Check library loaded ──────────────────────────────────────────────
+if (typeof window.LightweightCharts === 'undefined') {
+  ERR('LightweightCharts NOT loaded — check ./lightweight-charts.js exists next to this file');
+} else {
+  OK('LightweightCharts loaded, version = ' + window.LightweightCharts.version());
+}
+
+// ── Base options ──────────────────────────────────────────────────────
+function baseOpts(el, h) {
+  var w = el.clientWidth || el.offsetWidth || el.getBoundingClientRect().width || 600;
+  DIM('element ' + el.id + ': clientWidth=' + el.clientWidth + ' offsetWidth=' + el.offsetWidth + ' → w=' + w);
+  return {
+    width: w, height: h,
+    layout: { background: { type: 'solid', color: '#141716' }, textColor: '#9ca3af' },
+    grid:   { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } },
+    crosshair: { mode: 1 },
+    rightPriceScale: { borderColor: '#374151' },
+    timeScale: { borderColor: '#374151', timeVisible: true, secondsVisible: false }
+  };
+}
+
+// ── Build synthetic candles in scan.js format ─────────────────────────
+// scan.js stores: [ISO_string, open, high, low, close, volume]
+var candles = [];
+var price = 1800;
+for (var i = 240; i >= 0; i--) {
+  var dt = new Date(Date.UTC(2024, 4, 24) - i * 86400000); // 2024-05-24 minus i days
+  if (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) continue; // skip weekends
+  var o = +(price + (Math.random() - .5) * 20).toFixed(2);
+  var h = +(o + Math.random() * 30).toFixed(2);
+  var l = +(o - Math.random() * 25).toFixed(2);
+  var c = +(l + Math.random() * (h - l)).toFixed(2);
+  candles.push([dt.toISOString(), o, h, l, c, Math.floor(Math.random() * 1e6)]);
+  price = c;
+}
+OK('Generated ' + candles.length + ' daily candles');
+DIM('c[0] format: ' + candles[0][0] + '  (ISO string — needs .slice(0,10) for LWC)');
+DIM('After fix:   ' + candles[0][0].slice(0,10));
+
+// ── Build equity curve ────────────────────────────────────────────────
+var eq = [], eqVal = 100;
+for (var i = 200; i < candles.length; i += 2) {
+  eqVal += (Math.random() - .47) * 3;
+  eq.push({ d: candles[i][0], v: +eqVal.toFixed(2) }); // d is ISO string, same source
+}
+OK('Generated ' + eq.length + ' equity points');
+
+// ── Build ORB intraday candles ────────────────────────────────────────
+// intraday.js stores: { t: unix_seconds, o, h, l, c, v }
+var orbBase = 1800;
+var t0 = Math.floor(Date.UTC(2024, 4, 24, 3, 45, 0) / 1000); // 09:15 IST
+var orb = [];
+for (var i = 0; i < 14; i++) {
+  var o2 = +(orbBase + (Math.random() - .5) * 10).toFixed(2);
+  var h2 = +(o2 + Math.random() * 15).toFixed(2);
+  var l2 = +(o2 - Math.random() * 12).toFixed(2);
+  var c2 = +(l2 + Math.random() * (h2 - l2)).toFixed(2);
+  orb.push({ t: t0 + i * 900, o: o2, h: h2, l: l2, c: c2 });
+  orbBase = c2;
+}
+OK('Generated ' + orb.length + ' ORB candles (Unix seconds)');
+
+// ── Render charts ─────────────────────────────────────────────────────
+setTimeout(function () {
+  L('\n── initCharts (80 ms) ─────────────────────────────────');
+  var LC = window.LightweightCharts;
+  if (!LC) { ERR('LightweightCharts still not available at 80 ms'); return; }
+
+  // ① Main daily chart
+  try {
+    var el = document.getElementById('lwc-main');
+    L('\n① Main chart:');
+    var chart = LC.createChart(el, baseOpts(el, 300));
+    chart.applyOptions({ rightPriceScale: { scaleMargins: { top: .08, bottom: .28 } } });
+
+    var csData = candles.slice(-120).map(function (c) {
+      return { time: c[0].slice(0, 10), open: +c[1], high: +c[2], low: +c[3], close: +c[4] };
+    });
+    DIM('candlestick[0].time = ' + csData[0].time + '  (valid YYYY-MM-DD = ' + /^\d{4}-\d{2}-\d{2}$/.test(csData[0].time) + ')');
+    var cs = chart.addCandlestickSeries({ upColor:'#4ade80', downColor:'#f87171', borderUpColor:'#4ade80', borderDownColor:'#f87171', wickUpColor:'#4ade80', wickDownColor:'#f87171' });
+    cs.setData(csData);
+    OK('candlestick series set (' + csData.length + ' bars)');
+
+    var volData = candles.slice(-120).map(function (c) {
+      return { time: c[0].slice(0, 10), value: +c[5] || 0, color: (+c[4] >= +c[1]) ? 'rgba(74,222,128,.22)' : 'rgba(248,113,113,.22)' };
+    }).filter(function (c) { return c.value > 0; });
+    var vs = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: .75, bottom: 0 } });
+    vs.setData(volData);
+    OK('volume series set (' + volData.length + ' bars)');
+
+    chart.timeScale().fitContent();
+    OK('Main chart ✓');
+  } catch (e) { ERR('Main chart failed: ' + e.message + '\n' + e.stack); }
+
+  // ② Equity curve
+  try {
+    var el2 = document.getElementById('lwc-equity');
+    L('\n② Equity chart:');
+    var chart2 = LC.createChart(el2, baseOpts(el2, 150));
+    var eqData = eq.map(function (e) { return { time: e.d.slice(0, 10), value: e.v }; });
+    DIM('equity[0].time = ' + eqData[0].time);
+    var eqS = chart2.addAreaSeries({ lineColor: '#4ade80', topColor: 'rgba(74,222,128,.18)', bottomColor: 'rgba(74,222,128,.02)', lineWidth: 1.5 });
+    eqS.setData(eqData);
+    chart2.timeScale().fitContent();
+    OK('Equity chart ✓');
+  } catch (e) { ERR('Equity chart failed: ' + e.message); }
+
+  // ③ ORB mini
+  try {
+    var el3 = document.getElementById('lwc-orb');
+    L('\n③ ORB chart:');
+    var opts3 = baseOpts(el3, 100);
+    opts3.rightPriceScale = { visible: false };
+    opts3.timeScale = { visible: false };
+    opts3.crosshair = { mode: 0 };
+    opts3.handleScroll = false; opts3.handleScale = false;
+    opts3.grid = { vertLines: { visible: false }, horzLines: { visible: false } };
+    var chart3 = LC.createChart(el3, opts3);
+    var orbData = orb.map(function (c) { return { time: c.t, open: c.o, high: c.h, low: c.l, close: c.c }; });
+    DIM('orb[0].time = ' + orbData[0].time + '  (Unix seconds, type=' + typeof orbData[0].time + ')');
+    var cs3 = chart3.addCandlestickSeries({ upColor:'#4ade80', downColor:'#f87171', borderUpColor:'#4ade80', borderDownColor:'#f87171', wickUpColor:'#4ade80', wickDownColor:'#f87171' });
+    cs3.setData(orbData);
+    chart3.timeScale().fitContent();
+    OK('ORB chart ✓');
+  } catch (e) { ERR('ORB chart failed: ' + e.message); }
+
+}, 80);
+</script>
+</body>
+</html>
