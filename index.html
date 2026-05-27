@@ -340,12 +340,13 @@ function _lwcDestroy() {
   _lwcInst = [];
 }
 
-function _lwcBaseOpts(h) {
+function _lwcBaseOpts(el, h) {
+  var w = (el && (el.clientWidth || el.offsetWidth)) || 600;
   return {
-    autoSize: true,
+    width: w,
     height: h,
     layout: {
-      background: { type: 'solid', color: 'transparent' },
+      background: { type: 'solid', color: '#141716' },
       textColor: 'rgba(232,237,233,0.4)'
     },
     grid: {
@@ -366,7 +367,7 @@ function _lwcMain(el, d) {
   if (!raw || raw.length < 20 || !window.LightweightCharts) return null;
   var LC = window.LightweightCharts;
 
-  var opts = _lwcBaseOpts(300);
+  var opts = _lwcBaseOpts(el, 300);
   opts.rightPriceScale = { borderColor:'rgba(255,255,255,0.08)', scaleMargins:{ top:0.08, bottom:0.28 } };
   var chart = LC.createChart(el, opts);
 
@@ -425,7 +426,7 @@ function _lwcEquity(el, d) {
   if (!bt || bt.eq.length < 2 || !window.LightweightCharts) return null;
   var LC = window.LightweightCharts;
 
-  var chart = LC.createChart(el, _lwcBaseOpts(150));
+  var chart = LC.createChart(el, _lwcBaseOpts(el, 150));
   var endVal = bt.eq[bt.eq.length-1].v;
   var lineCol = endVal >= 100 ? '#4ade80' : '#f87171';
   var fillTop = endVal >= 100 ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.14)';
@@ -452,7 +453,7 @@ function _lwcOrb(el, d) {
   if (!d || !d.candles || !window.LightweightCharts) return null;
   var LC = window.LightweightCharts;
 
-  var opts = _lwcBaseOpts(100);
+  var opts = _lwcBaseOpts(el, 100);
   opts.rightPriceScale = { visible:false };
   opts.leftPriceScale  = { visible:false };
   opts.timeScale        = { visible:false };
@@ -493,6 +494,16 @@ function initCharts() {
     if (od) { c = _lwcOrb(orbEl, od); if(c) _lwcInst.push(c); }
   });
 }
+
+// Resize all charts when window width changes
+window.addEventListener('resize', function() {
+  _lwcInst.forEach(function(chart) {
+    try {
+      var el = chart.chartElement ? chart.chartElement().parentElement : null;
+      if (el) chart.resize(el.clientWidth, chart.options().height);
+    } catch(e) {}
+  });
+});
 
 // ── State ──────────────────────────────────────────────
 var S = {
@@ -2629,7 +2640,7 @@ function render(){
   else { el.innerHTML=renderScanner(); }
   updateSbRegime();
   // Initialise LightweightCharts into any containers the current page rendered
-  setTimeout(initCharts, 0);
+  setTimeout(initCharts, 80);
 }
 
 // ── Boot ───────────────────────────────────────────────
