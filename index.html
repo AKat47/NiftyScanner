@@ -364,15 +364,13 @@ function _lwcBaseOpts(el, h) {
 // ── Main daily candlestick chart ───────────────────────
 function _lwcMain(el, d) {
   var raw = d.raw, stopLoss = d.stopLoss;
-  console.log('[LWC] _lwcMain called | el.clientWidth='+el.clientWidth+' el.offsetWidth='+el.offsetWidth+' raw='+raw.length);
-  if (!raw || raw.length < 20 || !window.LightweightCharts) { console.error('[LWC] _lwcMain guard failed'); return null; }
+  if (!raw || raw.length < 20 || !window.LightweightCharts) return null;
   var LC = window.LightweightCharts;
 
   try {
   var opts = _lwcBaseOpts(el, 300);
   opts.rightPriceScale = { borderColor:'rgba(255,255,255,0.08)', scaleMargins:{ top:0.08, bottom:0.28 } };
   var chart = LC.createChart(el, opts);
-  console.log('[LWC] createChart OK, width used='+opts.width);
 
   // Candles — last 120
   var N = Math.min(120, raw.length), startIdx = raw.length - N;
@@ -424,9 +422,8 @@ function _lwcMain(el, d) {
   }
 
   chart.timeScale().fitContent();
-  console.log('[LWC] _lwcMain complete ✓');
   return chart;
-  } catch(e) { console.error('[LWC] _lwcMain ERROR:', e.message, e.stack); return null; }
+  } catch(e) { console.error('[LWC] chart error:', e.message); return null; }
 }
 
 // ── Backtest equity curve ──────────────────────────────
@@ -489,14 +486,7 @@ function _lwcOrb(el, d) {
 
 // Called after every render() — creates charts in their containers
 function initCharts() {
-  var mainEl = document.getElementById('lwc-main');
-  var eqEl   = document.getElementById('lwc-equity');
-  console.log('[LWC] initCharts fired | LWC='+!!window.LightweightCharts
-    +' | #lwc-main='+(mainEl?'found w='+mainEl.clientWidth:'MISSING')
-    +' | _chartData.main='+!!_chartData.main
-    +' | #lwc-equity='+(eqEl?'found':'MISSING')
-    +' | _chartData.equity='+!!_chartData.equity);
-  if (!window.LightweightCharts) { console.warn('[LWC] library not loaded — aborting'); return; }
+  if (!window.LightweightCharts) return;
   _lwcDestroy();
   var el, c;
 
@@ -1089,11 +1079,9 @@ function renderScanner(){
   var scanned = syms.filter(function(s){ return !!S.results[s]; });
 
   // Apply filters
-  var minScore = S.filter.minScore;
   var clsSel = S.filter.cls;
   var filtered = scanned.filter(function(sym){
     var r = S.results[sym];
-    if (r.score < minScore) return false;
     if (!clsSel[r.classification]) return false;
     return true;
   });
@@ -1147,8 +1135,7 @@ function renderScanner(){
       +'</div>' : '';
 
   var anyUnchecked = Object.keys(clsSel).some(function(k){ return !clsSel[k]; });
-  var filterNote = (minScore > 0 || anyUnchecked)
-    ? ' · <span style="color:var(--accent)">Filtered</span>' : '';
+  var filterNote = anyUnchecked ? ' · <span style="color:var(--accent)">Filtered</span>' : '';
   var listHdr = '<div class="list-header"><div class="list-label">'+syms.length+' symbols'+filterNote+'</div>'
     +'<div class="manage-link" onclick="S.modal=true;render()">+ Manage</div></div>';
 
@@ -1217,10 +1204,8 @@ function sigCard(s){
 
 /// ── Render: Price chart (LightweightCharts) ───────────
 function renderChart(raw, stopLoss) {
-  console.log('[LWC] renderChart called | raw='+(raw?raw.length:'null')+' stopLoss='+stopLoss);
-  if (!raw || raw.length < 20) { console.warn('[LWC] renderChart: not enough data, returning empty'); return ''; }
+  if (!raw || raw.length < 20) return '';
   _chartData.main = { raw: raw, stopLoss: stopLoss };
-  console.log('[LWC] renderChart: _chartData.main set, sample c[0]=', raw[0][0]);
   return '<div id="lwc-main" style="height:300px;background:var(--bg2);border-bottom:0.5px solid var(--border)"></div>';
 }
 
@@ -1647,25 +1632,6 @@ function renderFilter(){
     weak:    allScanned.filter(function(s){return S.results[s].classification==='weak';}).length
   };
   var cls=S.filter.cls;
-  var sc=S.filter.minScore;
-
-  // Score zone bar — coloured segments behind the slider
-  // zones: 0-69 weak(gray), 70-79 emerging(blue), 80-89 strong(amber), 90-120 elite(green)
-  // widths as % of 0-120 range
-  var zoneBar=
-    '<div style="position:relative;height:6px;border-radius:3px;overflow:hidden;margin:8px 0 2px;display:flex">'
-      +'<div style="flex:70;background:var(--txt3);opacity:0.35"></div>'    // 0-69 weak
-      +'<div style="flex:10;background:var(--blue);opacity:0.5"></div>'     // 70-79
-      +'<div style="flex:10;background:var(--amber);opacity:0.5"></div>'    // 80-89
-      +'<div style="flex:30;background:var(--green);opacity:0.6"></div>'    // 90-120
-    +'</div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--txt3);font-family:DM Mono,monospace;margin-bottom:6px">'
-      +'<span>0</span>'
-      +'<span style="position:relative;left:-4px;color:var(--blue)">70</span>'
-      +'<span style="position:relative;left:-2px;color:var(--amber)">80</span>'
-      +'<span style="position:relative;left:0px;color:var(--green)">90</span>'
-      +'<span>120</span>'
-    +'</div>';
 
   // Helper for a single checkbox row
   function cbRow(key,label,range,color,dim){
@@ -1696,8 +1662,8 @@ function renderFilter(){
 
   return '<div class="setup-wrap">'
 
-    // Market Regime
-    +'<div class="setup-card">'
+    // Market Regime — full width
+    +'<div class="setup-card setup-full">'
       +'<h3>Market Regime</h3>'
       +'<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--r);margin-bottom:12px;background:'+(regime.bullish?'var(--green-dim)':'var(--amber-dim)')+'">'
         +'<div style="width:10px;height:10px;border-radius:50%;background:'+(regime.bullish?'var(--green)':'var(--amber)')+'"></div>'
@@ -1712,31 +1678,7 @@ function renderFilter(){
         :'<div style="font-size:12px;color:var(--txt3)">Scan stocks to load Nifty data</div>')
     +'</div>'
 
-    // Minimum score slider with zone guidance
-    +'<div class="setup-card">'
-      +'<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">'
-        +'<h3 style="margin:0">Minimum Score</h3>'
-        +'<span id="scoreVal" style="font-size:20px;font-weight:700;font-family:DM Mono,monospace;color:'
-          +(sc>=90?'var(--green)':sc>=80?'var(--amber)':sc>=70?'var(--blue)':'var(--txt)')+'">'
-          +sc
-        +'</span>'
-      +'</div>'
-      +zoneBar
-      +'<input type="range" min="0" max="120" step="5" value="'+sc+'" id="scoreSlider" '
-        +'oninput="S.filter.minScore=+this.value;var h=document.getElementById(\'scoreHint\');var v=document.getElementById(\'scoreVal\');if(v)v.textContent=this.value;if(h)h.textContent=(+this.value===0?\'Showing all scores — drag right to raise the bar\':(+this.value>=90?\'Elite zone — only the highest conviction setups\':(+this.value>=80?\'Strong zone — well-positioned, confirmed momentum\':(+this.value>=70?\'Emerging zone — early movers, watch closely\':\'Below 70 — unconfirmed setups included\'))))" '
-        +'onchange="render()" '
-        +'style="width:100%;accent-color:'
-          +(sc>=90?'var(--green)':sc>=80?'var(--amber)':sc>=70?'var(--blue)':'var(--accent)')+';margin:0">'
-      +'<div id="scoreHint" style="font-size:11px;color:var(--txt3);margin-top:8px">'
-        +(sc===0?'Showing all scores — drag right to raise the bar'
-          :sc>=90?'Elite zone — only the highest conviction setups'
-          :sc>=80?'Strong zone — well-positioned, confirmed momentum'
-          :sc>=70?'Emerging zone — early movers, watch closely'
-          :'Below 70 — unconfirmed setups included')
-      +'</div>'
-    +'</div>'
-
-    // Classification checkboxes
+    // Classifications — left column
     +'<div class="setup-card">'
       +'<h3>Classifications</h3>'
       +'<div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Tick the tiers you want to see in Scanner</div>'
@@ -1744,29 +1686,37 @@ function renderFilter(){
       +cbRow('strong', 'Strong',  '80 – 89', 'var(--amber)', 'var(--amber-dim)')
       +cbRow('emerging','Emerging','70 – 79', 'var(--blue)',  'var(--blue-dim)')
       +cbRow('weak',   'Weak',    '< 70',    'var(--txt3)',  'rgba(255,255,255,.04)')
-    +'</div>'
-
-    // Reset filters button
-    +'<div class="setup-card setup-full" style="text-align:center">'
-      +'<button class="full-btn" style="margin:0" '
-        +'onclick="S.filter.minScore=0;S.filter.cls={elite:true,strong:true,emerging:true,weak:true};render()">'
-        +'↺ Reset all filters to defaults'
+      +'<button class="full-btn" style="margin-top:16px" '
+        +'onclick="S.filter.cls={elite:true,strong:true,emerging:true,weak:true};render()">'
+        +'↺ Reset to defaults'
       +'</button>'
     +'</div>'
 
-    // Scoring legend
-    +'<div class="setup-card setup-full">'
+    // Scoring Reference — right column
+    +'<div class="setup-card">'
       +'<h3>Scoring Reference</h3>'
-      +'<div style="font-size:11px;color:var(--txt2);line-height:2;font-family:DM Mono,monospace">'
-        +'SMA50 > SMA200 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+20<br>'
-        +'Close > SMA50 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+10<br>'
-        +'Close > SMA200 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+10<br>'
-        +'RSI(14) 55–75 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+10<br>'
-        +'ADX(14) > 25 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+15<br>'
-        +'Relative Strength > 0% &nbsp;&nbsp;&nbsp;&nbsp;+10 (+5 if >15%)<br>'
-        +'Volume > 1.5× avg &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+10 (+5 if >2×)<br>'
-        +'Within 5% of 52W high &nbsp;&nbsp;&nbsp;&nbsp;+10 (+5 if at high)<br>'
-        +'Volatility contraction &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+5'
+      +'<div style="display:flex;flex-direction:column;gap:6px">'
+        +[
+          ['SMA50 > SMA200',           '+20', 'var(--txt2)'],
+          ['Close > SMA50',            '+10', 'var(--txt2)'],
+          ['Close > SMA200',           '+10', 'var(--txt2)'],
+          ['RSI(14) 55 – 75',          '+10', 'var(--txt2)'],
+          ['ADX(14) > 25',             '+15', 'var(--txt2)'],
+          ['Relative Strength > 0%',   '+10 (+5 if >15%)', 'var(--txt2)'],
+          ['Volume > 1.5× avg',        '+10 (+5 if >2×)',  'var(--txt2)'],
+          ['Within 5% of 52W high',    '+10 (+5 if at high)', 'var(--txt2)'],
+          ['Volatility contraction',   '+5',  'var(--txt2)'],
+        ].map(function(r){
+          return '<div style="display:flex;justify-content:space-between;align-items:baseline;'
+            +'padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px">'
+            +'<span style="color:var(--txt3)">'+r[0]+'</span>'
+            +'<span style="font-family:DM Mono,monospace;font-weight:600;color:var(--green);white-space:nowrap;margin-left:8px">'+r[1]+'</span>'
+            +'</div>';
+        }).join('')
+        +'<div style="display:flex;justify-content:space-between;padding:7px 0 0;font-size:12px;font-weight:700">'
+          +'<span style="color:var(--txt2)">Total possible</span>'
+          +'<span style="font-family:DM Mono,monospace;color:var(--green)">120 pts</span>'
+        +'</div>'
       +'</div>'
     +'</div>'
 
