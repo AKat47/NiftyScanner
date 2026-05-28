@@ -66,6 +66,16 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
   .sidebar{width:240px;min-width:240px;}
   .sig-grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));}
 }
+@media(max-width:767px){
+  .sidebar{display:none!important;}
+  .main-area{width:100%!important;}
+  .sig-grid{display:flex!important;flex-direction:column;background:transparent;gap:0;}
+  .sector-strip{overflow-x:auto!important;-webkit-overflow-scrolling:touch;}
+  .sec-tab{white-space:nowrap;}
+  .setup-wrap{display:block!important;}
+  .setup-card{margin-bottom:14px;}
+  .detail-cols{display:block!important;}
+}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 13px;border-bottom:0.5px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:30;}
 .brand-name{font-size:16px;font-weight:700;color:var(--txt);letter-spacing:-.3px;}
 .brand-sub{font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;margin-top:2px;}
@@ -240,7 +250,7 @@ body{font-family:'Sora',sans-serif;display:flex;justify-content:center;}
 .empty{text-align:center;padding:56px 20px;color:var(--txt3);font-size:13px;line-height:1.8;}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--txt);color:var(--bg);font-size:13px;font-weight:600;padding:9px 20px;border-radius:24px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;z-index:99;}
 .toast.show{opacity:1;}
-.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;display:flex;border-top:0.5px solid var(--border);background:var(--bg);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
+.bottom-nav{position:fixed;bottom:0;left:0;width:100vw;display:flex;border-top:0.5px solid var(--border);background:var(--bg);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
 .bnav{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 0 8px;cursor:pointer;color:var(--txt3);gap:3px;border:none;background:none;-webkit-tap-highlight-color:transparent;}
 .bnav.active{color:var(--accent);}
 .bnav-icon{font-size:18px;line-height:1;}
@@ -560,9 +570,10 @@ var S = {
     cash:       parseFloat(localStorage.getItem('paper_cash')    || '500000'),
     positions:  JSON.parse(localStorage.getItem('paper_positions') || '[]'),
     trades:     JSON.parse(localStorage.getItem('paper_trades')    || '[]'),
-    autoTrade:  localStorage.getItem('paper_auto') === '1',
-    riskPct:    1,
-    maxPos:     5
+    autoTrade:   localStorage.getItem('paper_auto') === '1',
+    scannerAuto: localStorage.getItem('paper_scanner_auto') === '1',
+    riskPct:     1,
+    maxPos:      5
   }
 };
 
@@ -993,7 +1004,7 @@ function triggerScan(sec, force) {
   S.scanning=true; render();
   liveScanSector(sec, force)
     .catch(function(e){ showToast('Scan error: '+e.message); })
-    .then(function(){ S.scanning=false; render(); });
+    .then(function(){ S.scanning=false; paperScannerCheck(); render(); });
 }
 
 function scanAll(force) {
@@ -1005,7 +1016,7 @@ function scanAll(force) {
   });
   batchScan(Object.keys(sectorMap), sectorMap, force)
     .catch(function(e){ showToast('Scan error: '+e.message); })
-    .then(function(){ S.scanning=false; render(); });
+    .then(function(){ S.scanning=false; paperScannerCheck(); render(); });
 }
 
 // ── Helpers ────────────────────────────────────────────
@@ -1513,13 +1524,13 @@ function renderDetailBt(s) {
       var cls = t.why==='Open' ? 'bt-open' : t.win ? 'bt-win' : 'bt-loss';
       var retStr = (t.ret>=0?'+':'')+t.ret.toFixed(1)+'%';
       return '<div class="bt-trade">'
-        +'<div style="color:var(--txt2)">'
-          +'<span style="color:var(--txt3)">In&nbsp; </span>'+dateStr(t.ed)+'<br>'
-          +'<span style="color:var(--txt3)">Out </span>'+dateStr(t.xd)
+        +'<div style="color:var(--txt)">'
+          +'<span style="color:var(--txt2)">In&nbsp; </span>'+dateStr(t.ed)+'<br>'
+          +'<span style="color:var(--txt2)">Out </span>'+dateStr(t.xd)
         +'</div>'
-        +'<div style="color:var(--txt2)">'
+        +'<div style="color:var(--txt)">'
           +'₹'+Math.round(t.ep)+' → ₹'+Math.round(t.xp)+'<br>'
-          +'<span style="color:var(--txt3)">'+t.days+'d · '+t.why+'</span>'
+          +'<span style="color:var(--txt2)">'+t.days+'d · '+t.why+'</span>'
         +'</div>'
         +'<div class="'+cls+'" style="text-align:right;font-weight:700">'+retStr+'</div>'
         +'</div>';
@@ -2412,7 +2423,8 @@ function savePaper() {
   localStorage.setItem('paper_cash',      S.paper.cash);
   localStorage.setItem('paper_positions', JSON.stringify(S.paper.positions));
   localStorage.setItem('paper_trades',    JSON.stringify(S.paper.trades));
-  localStorage.setItem('paper_auto',      S.paper.autoTrade ? '1' : '0');
+  localStorage.setItem('paper_auto',         S.paper.autoTrade   ? '1' : '0');
+  localStorage.setItem('paper_scanner_auto', S.paper.scannerAuto ? '1' : '0');
 }
 
 function paperBuy(sym, entry, stop, target, setup) {
@@ -2455,9 +2467,11 @@ function paperClose(id, exitPrice, reason) {
   S.paper.trades.unshift({
     id: p.id, sym: p.sym,
     entry: p.entry, exit: exitPrice, qty: p.qty,
-    pnl: pnl, reason: reason,
+    pnl: pnl, reason: reason, source: p.source || 'day',
     entryTime: p.time,
-    exitTime: istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST'
+    exitTime: p.source === 'scanner'
+      ? new Date().toISOString().slice(0,10)
+      : istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST'
   });
   S.paper.positions.splice(idx, 1);
   savePaper();
@@ -2502,6 +2516,63 @@ function paperAutoCheck() {
   });
 }
 
+// ── Scanner-signal auto-trade ──────────────────────────
+// Called after every scan. Opens ₹1L positions on buy signals,
+// closes them when sell signal fires, score<60, or stop loss hit.
+function paperScannerCheck() {
+  if (!S.paper.scannerAuto) return;
+  var results = S.results;
+  var today   = new Date().toISOString().slice(0, 10);
+  var opened  = 0, closed = 0;
+
+  // 1. Check exits on open scanner positions
+  S.paper.positions.slice().forEach(function(pos) {
+    if (pos.source !== 'scanner') return;
+    var r = results[pos.sym];
+    if (!r) return;
+    pos.ltp = r.close; // keep LTP fresh
+    if (r.signal === 'sell') {
+      paperClose(pos.id, r.close, 'Sell Signal'); closed++;
+    } else if (r.score < 60) {
+      paperClose(pos.id, r.close, 'Score < 60'); closed++;
+    } else if (pos.stop && r.close <= +pos.stop) {
+      paperClose(pos.id, r.close, 'Stop Loss'); closed++;
+    }
+  });
+
+  // 2. Open new positions for fresh buy signals
+  var sigSyms = Object.keys(results).sort(function(a,b){
+    return (results[b].score||0) - (results[a].score||0); // highest score first
+  });
+  sigSyms.forEach(function(sym) {
+    if (sym === 'NIFTY50') return;
+    var r = results[sym];
+    if (!r || r.signal !== 'buy') return;
+    if (S.paper.positions.find(function(p){ return p.sym === sym; })) return;
+    var entry = r.close;
+    var stop  = r.stopLoss ? +r.stopLoss : null;
+    if (!entry || entry <= 0 || !stop || stop >= entry) return;
+    var qty  = Math.max(1, Math.floor(100000 / entry)); // ₹1L allocation
+    var cost = entry * qty;
+    if (cost > S.paper.cash) return; // skip if insufficient cash
+    S.paper.cash -= cost;
+    S.paper.positions.push({
+      id:     Date.now() + Math.random(),
+      sym:    sym,
+      entry:  entry, qty: qty, stop: stop, target: null,
+      setup:  (r.classification === 'elite' ? '⭐ Elite' : '▲ Strong') + ' · ' + r.score + ' pts',
+      source: 'scanner',
+      time:   today,
+      ltp:    entry
+    });
+    opened++;
+  });
+
+  if (opened || closed) savePaper();
+  if (opened) showToast('📊 Scanner auto-bought ' + opened + ' position' + (opened>1?'s':''));
+  if (S.tab === 'paper') render();
+}
+
 function renderPaperTrading() {
   var p = S.paper;
   var quotes = S.day.quotes;
@@ -2532,16 +2603,25 @@ function renderPaperTrading() {
             +(totalPnl>=0?'+':'')+'₹'+fmt(Math.abs(totalPnl))+' ('+totalPnlPct.toFixed(1)+'%)'
           +'</div>'
         +'</div>'
-        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
+          // Day-trading auto toggle
           +'<button onclick="S.paper.autoTrade=!S.paper.autoTrade;savePaper();render()" '
-            +'style="padding:7px 14px;border-radius:20px;border:1px solid '+(p.autoTrade?'var(--green)':'var(--border)')+';'
+            +'style="padding:6px 12px;border-radius:20px;border:1px solid '+(p.autoTrade?'var(--green)':'var(--border)')+';'
               +'background:'+(p.autoTrade?'var(--green-dim)':'var(--bg3)')+';'
               +'color:'+(p.autoTrade?'var(--green)':'var(--txt3)')+';'
-              +'font-size:12px;font-weight:700;cursor:pointer;font-family:\'DM Mono\',monospace">'
-            +(p.autoTrade?'⚡ Auto ON':'○ Auto OFF')+'</button>'
-          +(p.autoTrade
-            ?'<div style="font-size:10px;color:var(--green);text-align:right;font-family:DM Mono,monospace">Gap Up Play >&nbsp;2.5%</div>'
-            :'<div style="font-size:10px;color:var(--txt3);text-align:right;font-family:DM Mono,monospace">Refresh quotes<br>to trigger</div>')
+              +'font-size:11px;font-weight:700;cursor:pointer;font-family:\'DM Mono\',monospace">'
+            +(p.autoTrade?'⚡ Day Auto ON':'○ Day Auto OFF')+'</button>'
+          // Scanner auto toggle
+          +'<button onclick="S.paper.scannerAuto=!S.paper.scannerAuto;savePaper();render()" '
+            +'style="padding:6px 12px;border-radius:20px;border:1px solid '+(p.scannerAuto?'var(--accent)':'var(--border)')+';'
+              +'background:'+(p.scannerAuto?'rgba(61,255,160,.07)':'var(--bg3)')+';'
+              +'color:'+(p.scannerAuto?'var(--accent)':'var(--txt3)')+';'
+              +'font-size:11px;font-weight:700;cursor:pointer;font-family:\'DM Mono\',monospace">'
+            +(p.scannerAuto?'📊 Scan Auto ON':'○ Scan Auto OFF')+'</button>'
+          +'<div style="font-size:10px;color:var(--txt3);text-align:right;font-family:DM Mono,monospace;line-height:1.5">'
+            +(p.scannerAuto?'<span style="color:var(--accent)">₹1L / buy signal</span><br>':'')
+            +(p.autoTrade?'<span style="color:var(--green)">Gap Up Play > 2.5%</span>':'')
+          +'</div>'
         +'</div>'
       +'</div>'
       // Stats row
@@ -2578,7 +2658,9 @@ function renderPaperTrading() {
           +'<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px">'
             +'<div>'
               +'<div style="font-size:16px;font-weight:700;color:var(--txt)">'+escHtml(pos.sym)+'</div>'
-              +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">'+pos.setup+' · '+pos.qty+' qty · '+pos.time+'</div>'
+              +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">'
+                +(pos.source==='scanner'?'<span style="color:var(--accent);font-weight:700">📊 Scanner</span> · ':'')
+                +pos.setup+' · '+pos.qty+' qty · '+pos.time+'</div>'
             +'</div>'
             +'<div style="text-align:right">'
               +'<div style="font-size:17px;font-weight:700;color:'+col+'">'+(pnl>=0?'+':'')+'₹'+fmt(Math.abs(pnl))+'</div>'
@@ -2618,7 +2700,10 @@ function renderPaperTrading() {
     posHtml = '<div style="padding:24px 20px;text-align:center">'
       +'<div style="font-size:32px;margin-bottom:10px">📋</div>'
       +'<div style="font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:6px">No Open Positions</div>'
-      +'<div style="font-size:12px;color:var(--txt3);line-height:1.6">Go to ⚡ Day Trading, load quotes,<br>then tap <b style="color:var(--accent)">Paper Buy</b> on any setup.<br>Or enable <b style="color:var(--green)">Auto ON</b> to buy Gap Up Plays automatically.</div>'
+      +'<div style="font-size:12px;color:var(--txt3);line-height:1.6">'
+        +'Enable <b style="color:var(--accent)">📊 Scan Auto</b> and run a scan — positions open automatically on buy signals.<br>'
+        +'Or go to ⚡ Day Trading and tap <b style="color:var(--green)">Paper Buy</b> to add intraday trades manually.'
+      +'</div>'
     +'</div>';
   }
 
@@ -2643,7 +2728,10 @@ function renderPaperTrading() {
           +'<div style="flex:1;min-width:0">'
             +'<div style="font-size:13px;font-weight:700;color:var(--txt)">'+icon+' '+escHtml(t.sym)+'</div>'
             +'<div style="font-size:11px;color:var(--txt3);font-family:DM Mono,monospace">₹'+Math.round(t.entry)+' → ₹'+Math.round(t.exit)+' · '+t.qty+' qty · '+t.reason+'</div>'
-            +'<div style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace">'+t.entryTime+' → '+t.exitTime+'</div>'
+            +'<div style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace">'
+              +(t.source==='scanner'?'<span style="color:var(--accent)">📊</span> ':'')
+              +t.entryTime+' → '+t.exitTime
+            +'</div>'
           +'</div>'
           +'<div style="text-align:right;margin-left:10px">'
             +'<div style="font-size:15px;font-weight:700;color:'+col+'">'+(t.pnl>=0?'+':'')+'₹'+Math.round(Math.abs(t.pnl))+'</div>'
