@@ -385,6 +385,7 @@ body{
 
 /* ── Fade-up animation ───────────────────────── */
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.4);}}
 
 /* ── Scrollbar ───────────────────────────────── */
 ::-webkit-scrollbar{width:8px;height:8px;}
@@ -718,7 +719,9 @@ var S = {
     autoTrade:   localStorage.getItem('paper_auto') === '1',
     scannerAuto: localStorage.getItem('paper_scanner_auto') === '1',
     riskPct:     1,
-    maxPos:      5
+    maxPos:      5,
+    liveInterval: null,
+    liveLastRefresh: null
   }
 };
 
@@ -2609,6 +2612,7 @@ function paperBuy(sym, entry, stop, target, setup) {
   savePaper();
   showToast('📋 Bought ' + qty + ' × ' + sym + ' @ ₹' + Math.round(entry));
   if (S.tab === 'paper') render();
+  startPaperLiveFeed();
 }
 
 function paperClose(id, exitPrice, reason) {
@@ -2628,6 +2632,7 @@ function paperClose(id, exitPrice, reason) {
       : istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' IST'
   });
   S.paper.positions.splice(idx, 1);
+  if (S.paper.positions.length === 0) stopPaperLiveFeed();
   savePaper();
   var icon = pnl >= 0 ? '✅' : '🔴';
   showToast(icon + ' Closed ' + p.sym + ' ' + (pnl>=0?'+':'') + '₹' + Math.round(Math.abs(pnl)) + ' (' + reason + ')');
@@ -2727,6 +2732,41 @@ function paperScannerCheck() {
   if (S.tab === 'paper') render();
 }
 
+// ── Paper Trading Live Feed ────────────────────────────
+async function fetchPaperQuotes() {
+  var syms = S.paper.positions.map(function(p){ return p.sym; });
+  if (!syms.length) { stopPaperLiveFeed(); return; }
+  var kiteToken = S.sources.kite.connected && S.sources.kite.token ? S.sources.kite.token : null;
+  var url = '/api/quote?symbols=' + syms.join(',') + (kiteToken ? '&kiteToken=' + encodeURIComponent(kiteToken) : '');
+  try {
+    var res = await fetch(url);
+    var json = await res.json();
+    if (!json.ok) return;
+    var quotes = json.quotes || {};
+    S.paper.positions.slice().forEach(function(pos) {
+      var q = quotes[pos.sym];
+      if (q && q.ltp) pos.ltp = q.ltp;
+      // Auto stop-loss: always check regardless of autoTrade toggle
+      if (pos.stop && pos.ltp <= +pos.stop) {
+        paperClose(pos.id, pos.ltp, 'Stop Loss');
+      }
+    });
+    S.paper.liveLastRefresh = istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+' IST';
+    savePaper();
+    if (S.tab === 'paper') render();
+  } catch(e) { /* silent — don't interrupt UI */ }
+}
+
+function startPaperLiveFeed() {
+  stopPaperLiveFeed();
+  fetchPaperQuotes();
+  S.paper.liveInterval = setInterval(fetchPaperQuotes, 5000);
+}
+
+function stopPaperLiveFeed() {
+  if (S.paper.liveInterval) { clearInterval(S.paper.liveInterval); S.paper.liveInterval = null; }
+}
+
 function renderPaperTrading() {
   var p = S.paper;
   var quotes = S.day.quotes;
@@ -2751,11 +2791,20 @@ function renderPaperTrading() {
     '<div style="padding:16px 16px 12px;background:var(--bg2);border-bottom:0.5px solid var(--border)">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">'
         +'<div>'
-          +'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace;margin-bottom:2px">Paper Portfolio</div>'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">'
+            +'<div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.07em;font-family:DM Mono,monospace">Paper Portfolio</div>'
+            +(p.liveInterval
+              ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:var(--green);font-family:DM Mono,monospace">'
+                +'<span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:livePulse 1.2s ease-in-out infinite"></span>LIVE</span>'
+              : '')
+          +'</div>'
           +'<div style="font-size:24px;font-weight:700;color:var(--txt)">₹'+fmt(portfolioVal)+'</div>'
           +'<div style="font-size:13px;font-weight:600;color:'+g(totalPnl)+';margin-top:2px">'
             +(totalPnl>=0?'+':'')+'₹'+fmt(Math.abs(totalPnl))+' ('+totalPnlPct.toFixed(1)+'%)'
           +'</div>'
+          +(p.liveLastRefresh
+            ? '<div style="font-size:10px;color:var(--txt3);font-family:DM Mono,monospace;margin-top:3px">Updated '+p.liveLastRefresh+'</div>'
+            : '')
         +'</div>'
         +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
           // Day-trading auto toggle
@@ -2928,6 +2977,7 @@ function render(){
 setTheme(localStorage.getItem('nifty_theme') || 'light');
 render();
 initKite();
+if (S.paper.positions.length > 0) startPaperLiveFeed();
 </script>
 </body>
 </html>
