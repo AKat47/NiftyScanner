@@ -895,6 +895,14 @@ var S = {
     clientId: localStorage.getItem('angel_client_id')||''
   },
 
+  twilio: {
+    enabled:    localStorage.getItem('twilio_enabled') === '1',
+    accountSid: localStorage.getItem('twilio_account_sid') || '',
+    authToken:  localStorage.getItem('twilio_auth_token')  || '',
+    from:       localStorage.getItem('twilio_from')        || '',
+    to:         localStorage.getItem('twilio_to')          || ''
+  },
+
   results:{}, modal:false,
 
   // Analyze tab state
@@ -1415,6 +1423,49 @@ function showToast(msg){
   var t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   setTimeout(function(){t.classList.remove('show');},2400);
+}
+
+// ── Twilio WhatsApp notifications ──────────────────────
+function saveTwilio() {
+  var sid  = (document.getElementById('twilioSid')   ||{}).value || '';
+  var tok  = (document.getElementById('twilioToken') ||{}).value || '';
+  var from = (document.getElementById('twilioFrom')  ||{}).value || '';
+  var to   = (document.getElementById('twilioTo')    ||{}).value || '';
+  localStorage.setItem('twilio_account_sid', sid);
+  localStorage.setItem('twilio_auth_token',  tok);
+  localStorage.setItem('twilio_from',        from);
+  localStorage.setItem('twilio_to',          to);
+  S.twilio.accountSid = sid;
+  S.twilio.authToken  = tok;
+  S.twilio.from       = from;
+  S.twilio.to         = to;
+  showToast('✅ Twilio credentials saved');
+}
+
+function toggleTwilio() {
+  S.twilio.enabled = !S.twilio.enabled;
+  localStorage.setItem('twilio_enabled', S.twilio.enabled ? '1' : '0');
+  render();
+  showToast(S.twilio.enabled ? '🔔 Notifications ON' : '🔕 Notifications OFF');
+}
+
+function testNotification() {
+  sendNotification('🧪 Nifty Scanner test message — WhatsApp alerts are working!');
+  showToast('Sending test…');
+}
+
+function sendNotification(message) {
+  if (!S.twilio.enabled) return;
+  // Credentials are stored in Vercel env vars — just POST the message text
+  fetch('/api/notify', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ message: message })
+  }).then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok) console.warn('Notify failed:', j.error);
+    })
+    .catch(function(e){ console.warn('Notify error:', e); });
 }
 
 function updateConnPill() {
@@ -2256,10 +2307,61 @@ function renderSetup(){
         :'<div style="font-size:13px;color:var(--amber);background:var(--amber-dim);padding:10px 14px;border-radius:var(--r);margin-bottom:14px">'+(S.sources.kite.error||'Not connected')+' — using fallback</div>')
       +'<button class="full-btn" onclick="fetchKiteToken()" style="margin-bottom:0">↺ Refresh Kite token</button>'
     +'</div>'
+    // ── Twilio WhatsApp Notifications card
+    +'<div class="setup-card setup-full">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+        +'<div>'
+          +'<h3 style="margin:0">WhatsApp Notifications</h3>'
+          +'<div style="font-size:12px;color:var(--txt3);margin-top:4px">via Twilio · Paper trade alerts on buy, stop loss &amp; target</div>'
+        +'</div>'
+        // Toggle switch
+        +'<div onclick="toggleTwilio()" style="cursor:pointer;display:flex;align-items:center;gap:8px">'
+          +'<span style="font-size:12px;color:var(--txt3)">'+(S.twilio.enabled?'ON':'OFF')+'</span>'
+          +'<div style="width:40px;height:24px;border-radius:999px;background:'+(S.twilio.enabled?'var(--green)':'var(--bg4)')+';position:relative;transition:background .2s">'
+            +'<div style="position:absolute;top:3px;left:'+(S.twilio.enabled?'19':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s"></div>'
+          +'</div>'
+        +'</div>'
+      +'</div>'
+      // Status banner
+      +(S.twilio.enabled && S.twilio.accountSid
+        ? '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:16px">'
+            +'<div style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>'
+            +'<span style="font-size:13px;color:var(--green);font-weight:600">Active — alerts will be sent to your WhatsApp</span>'
+          +'</div>'
+        : S.twilio.enabled
+          ? '<div style="padding:10px 14px;background:var(--amber-dim);border-radius:var(--r);font-size:13px;color:var(--amber);margin-bottom:16px">⚠ Credentials not saved yet — fill in the fields below</div>'
+          : '')
+      // Fields
+      +'<div class="field-row"><label class="field-label">Account SID</label>'
+        +'<input class="field-input" id="twilioSid" type="password" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="'+escHtml(S.twilio.accountSid)+'"></div>'
+      +'<div class="field-row"><label class="field-label">Auth Token</label>'
+        +'<input class="field-input" id="twilioToken" type="password" placeholder="your_auth_token" value="'+escHtml(S.twilio.authToken)+'"></div>'
+      +'<div class="field-row"><label class="field-label">From (Twilio WhatsApp number)</label>'
+        +'<input class="field-input" id="twilioFrom" type="text" placeholder="whatsapp:+14155238886" value="'+escHtml(S.twilio.from)+'"></div>'
+      +'<div class="field-row" style="margin-bottom:0"><label class="field-label">To (your WhatsApp number)</label>'
+        +'<input class="field-input" id="twilioTo" type="text" placeholder="whatsapp:+919876543210" value="'+escHtml(S.twilio.to)+'"></div>'
+      // Action buttons
+      +'<div style="display:flex;gap:10px;margin-top:16px">'
+        +'<button class="full-btn primary" onclick="saveTwilio()" style="margin:0;flex:1">Save Credentials</button>'
+        +'<button class="full-btn" onclick="testNotification()" style="margin:0;flex:0 0 auto;padding:13px 20px" '
+          +(S.twilio.enabled && S.twilio.accountSid ? '' : 'disabled style="opacity:.45;cursor:not-allowed;margin:0;flex:0 0 auto;padding:13px 20px"')
+          +'>Send Test</button>'
+      +'</div>'
+      // Setup guide
+      +'<div style="margin-top:16px;padding:14px 16px;background:var(--bg3);border-radius:var(--r);font-size:12.5px;color:var(--txt3);line-height:1.8">'
+        +'<strong style="color:var(--txt2)">Setup guide:</strong><br>'
+        +'1. Sign up at <span style="color:var(--accent)">twilio.com</span> → get Account SID &amp; Auth Token from Console<br>'
+        +'2. Enable the <span style="color:var(--accent)">WhatsApp Sandbox</span> (Messaging → Try it out → WhatsApp)<br>'
+        +'3. Send the join code from your phone to activate the sandbox<br>'
+        +'4. Set <span style="color:var(--accent);font-family:DM Mono,monospace">TWILIO_ACCOUNT_SID · TWILIO_AUTH_TOKEN · TWILIO_FROM · TWILIO_TO</span> as Vercel environment variables<br>'
+        +'5. Paste the same credentials here and hit Save'
+      +'</div>'
+    +'</div>'
+    // ── MongoDB Cache (info card)
     +'<div class="setup-card" style="background:var(--bg3);border-style:dashed">'
       +'<h3 style="color:var(--txt3)">MongoDB Cache</h3>'
-      +'<div style="font-size:11px;color:var(--txt3);line-height:1.8">'
-        +'Candle data is cached in MongoDB once per hour (IST) and shared across all users — Angel data refreshes automatically each hour during market hours. Set <span style="color:var(--accent);font-family:DM Mono,monospace">MONGODB_URI</span> in Vercel environment variables.'
+      +'<div style="font-size:12px;color:var(--txt3);line-height:1.8">'
+        +'Candle data is cached in MongoDB once per hour (IST) and shared across all users. Set <span style="color:var(--accent);font-family:DM Mono,monospace">MONGODB_URI</span> in Vercel environment variables.'
       +'</div>'
     +'</div>'
   +'</div>';
@@ -2867,6 +2969,13 @@ function paperBuy(sym, entry, stop, target, setup) {
   });
   savePaper();
   showToast('📋 Bought ' + qty + ' × ' + sym + ' @ ₹' + Math.round(entry));
+  sendNotification(
+    '📋 *Paper Buy — ' + sym + '*\n' +
+    'Entry: ₹' + Math.round(entry) + ' × ' + qty + ' qty\n' +
+    'Stop: ₹' + (stop ? Math.round(stop) : '—') + ' | Target: ₹' + (target ? Math.round(target) : '—') + '\n' +
+    'Setup: ' + (setup || 'Manual') + '\n' +
+    'Time: ' + istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) + ' IST'
+  );
   if (S.tab === 'paper') render();
   startPaperLiveFeed();
 }
@@ -2892,6 +3001,16 @@ function paperClose(id, exitPrice, reason) {
   savePaper();
   var icon = pnl >= 0 ? '✅' : '🔴';
   showToast(icon + ' Closed ' + p.sym + ' ' + (pnl>=0?'+':'') + '₹' + Math.round(Math.abs(pnl)) + ' (' + reason + ')');
+  // Notify only for auto-events (stop loss / target), and manual closes
+  var notifyIcon = reason === 'Stop Loss' ? '🛑' : reason === 'Target Hit' ? '🎯' : '📤';
+  sendNotification(
+    notifyIcon + ' *Paper Close — ' + p.sym + '*\n' +
+    'Reason: ' + reason + '\n' +
+    'Entry: ₹' + Math.round(p.entry) + ' → Exit: ₹' + Math.round(exitPrice) + '\n' +
+    'P&L: ' + (pnl >= 0 ? '+' : '') + '₹' + Math.round(Math.abs(pnl)) +
+      ' (' + ((exitPrice - p.entry) / p.entry * 100).toFixed(2) + '%)\n' +
+    'Time: ' + istNow().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) + ' IST'
+  );
   render();
 }
 
