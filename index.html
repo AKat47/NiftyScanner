@@ -2935,11 +2935,58 @@ function renderStrategy() {
 // ── Paper Trading ──────────────────────────────────────
 
 function savePaper() {
-  localStorage.setItem('paper_cash',      S.paper.cash);
-  localStorage.setItem('paper_positions', JSON.stringify(S.paper.positions));
-  localStorage.setItem('paper_trades',    JSON.stringify(S.paper.trades));
+  // 1. Always persist to localStorage (instant, offline-safe)
+  localStorage.setItem('paper_cash',         S.paper.cash);
+  localStorage.setItem('paper_positions',    JSON.stringify(S.paper.positions));
+  localStorage.setItem('paper_trades',       JSON.stringify(S.paper.trades));
   localStorage.setItem('paper_auto',         S.paper.autoTrade   ? '1' : '0');
   localStorage.setItem('paper_scanner_auto', S.paper.scannerAuto ? '1' : '0');
+
+  // 2. Also sync to MongoDB so the server-side cron can read it
+  fetch('/api/portfolio', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      positions:   S.paper.positions,
+      trades:      S.paper.trades,
+      cash:        S.paper.cash,
+      capital:     S.paper.capital,
+      autoTrade:   S.paper.autoTrade,
+      scannerAuto: S.paper.scannerAuto
+    })
+  }).catch(function() {}); // silent — localStorage is source of truth in browser
+}
+
+// ── Load portfolio from server on boot (cron may have updated it) ──────────
+function syncPortfolioFromServer() {
+  fetch('/api/portfolio')
+    .then(function(r){ return r.json(); })
+    .then(function(j) {
+      if (!j.ok || !j.portfolio) return; // no server data yet
+      var p = j.portfolio;
+
+      // Only adopt server state if it's newer (cron may have closed positions)
+      // We detect this by comparing position counts or trade counts
+      var serverTrades   = (p.trades    || []).length;
+      var localTrades    = S.paper.trades.length;
+      var serverPositions = (p.positions || []).length;
+      var localPositions  = S.paper.positions.length;
+
+      // Server has more closed trades → cron closed something while browser was away
+      if (serverTrades > localTrades || serverPositions < localPositions) {
+        S.paper.positions  = p.positions  || [];
+        S.paper.trades     = p.trades     || [];
+        S.paper.cash       = p.cash       ?? S.paper.cash;
+        // Persist the server state back to localStorage
+        localStorage.setItem('paper_cash',      S.paper.cash);
+        localStorage.setItem('paper_positions', JSON.stringify(S.paper.positions));
+        localStorage.setItem('paper_trades',    JSON.stringify(S.paper.trades));
+        render();
+        if (S.paper.positions.length > 0) startPaperLiveFeed();
+        showToast('📥 Portfolio synced from server');
+      }
+    })
+    .catch(function() {}); // silent — localStorage still works
 }
 
 function paperBuy(sym, entry, stop, target, setup) {
@@ -3353,6 +3400,8 @@ setTheme(localStorage.getItem('nifty_theme') || 'light');
 render();
 initKite();
 if (S.paper.positions.length > 0) startPaperLiveFeed();
+// Pull any server-side cron updates (stop losses closed while browser was away)
+syncPortfolioFromServer();
 </script>
 </body>
 </html>
