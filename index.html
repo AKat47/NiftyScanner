@@ -593,6 +593,35 @@ body{
 .bnav-icon{font-size:19px;line-height:1;}
 .bnav-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);}
 
+/* ── Symbol autocomplete ────────────────────────────── */
+.ac-wrap{position:relative;}
+.ac-drop{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:var(--bg);border:1px solid var(--border2);
+  border-radius:var(--rl);box-shadow:var(--shadow-lg);
+  max-height:280px;overflow-y:auto;z-index:200;
+}
+.ac-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;cursor:pointer;
+  transition:background .1s ease;
+}
+.ac-item:hover,.ac-item.ac-active{background:var(--bg2);}
+.ac-ticker{
+  font-size:13.5px;font-weight:700;
+  font-family:var(--font-mono);color:var(--txt);
+  min-width:110px;flex-shrink:0;
+}
+.ac-ticker mark{background:none;color:var(--green);font-weight:800;}
+.ac-name{font-size:12.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-name mark{background:none;color:var(--green);font-weight:700;}
+.ac-sector{
+  margin-left:auto;font-size:10.5px;font-weight:600;
+  color:var(--txt3);font-family:var(--font-mono);
+  flex-shrink:0;
+}
+.ac-empty{padding:14px 16px;font-size:13px;color:var(--txt3);text-align:center;}
+
 /* ── Animations ─────────────────────────────────── */
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 @keyframes livePulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.4);}}
@@ -944,6 +973,91 @@ var S = {
 };
 
 // ── Sectors ────────────────────────────────────────────
+// ── NSE Symbol → Company name dictionary ──────────────
+// Used for autocomplete in Analyze. Ticker + full name both searchable.
+var NSE_STOCKS = [
+  ['RELIANCE','Reliance Industries'],['TCS','Tata Consultancy Services'],
+  ['HDFCBANK','HDFC Bank'],['INFY','Infosys'],['ICICIBANK','ICICI Bank'],
+  ['HINDUNILVR','Hindustan Unilever'],['SBIN','State Bank of India'],
+  ['BHARTIARTL','Bharti Airtel'],['ITC','ITC Limited'],['KOTAKBANK','Kotak Mahindra Bank'],
+  ['LT','Larsen & Toubro'],['AXISBANK','Axis Bank'],['BAJFINANCE','Bajaj Finance'],
+  ['MARUTI','Maruti Suzuki'],['WIPRO','Wipro'],['ONGC','ONGC'],
+  ['NTPC','NTPC Limited'],['SUNPHARMA','Sun Pharmaceutical'],['TATAMOTORS','Tata Motors'],
+  ['ADANIPORTS','Adani Ports'],['ULTRACEMCO','UltraTech Cement'],['NESTLEIND','Nestle India'],
+  ['TITAN','Titan Company'],['HCLTECH','HCL Technologies'],['TECHM','Tech Mahindra'],
+  ['BAJAJFINSV','Bajaj Finserv'],['DRREDDY','Dr. Reddys Laboratories'],
+  ['CIPLA','Cipla'],['DIVISLAB','Divis Laboratories'],['HDFCLIFE','HDFC Life Insurance'],
+  ['SBILIFE','SBI Life Insurance'],['COALINDIA','Coal India'],['POWERGRID','Power Grid'],
+  ['TATACONSUM','Tata Consumer Products'],['GRASIM','Grasim Industries'],
+  ['BRITANNIA','Britannia Industries'],['APOLLOHOSP','Apollo Hospitals'],
+  ['HINDALCO','Hindalco Industries'],['TATASTEEL','Tata Steel'],
+  ['ADANIENT','Adani Enterprises'],['ADANIGREEN','Adani Green Energy'],
+  ['BPCL','Bharat Petroleum'],['IOC','Indian Oil Corporation'],
+  ['VEDL','Vedanta'],['SAIL','Steel Authority of India'],
+  ['NMDC','NMDC Limited'],['JSWSTEEL','JSW Steel'],['JINDALSTEL','Jindal Steel'],
+  ['INDUSINDBK','IndusInd Bank'],['BANDHANBNK','Bandhan Bank'],
+  ['FEDERALBNK','Federal Bank'],['IDFCFIRSTB','IDFC First Bank'],['AUBANK','AU Small Finance Bank'],
+  ['YESBANK','Yes Bank'],['PNB','Punjab National Bank'],['BANKBARODA','Bank of Baroda'],
+  ['CANBK','Canara Bank'],['UNIONBANK','Union Bank of India'],['IOBK','IOB'],
+  ['LTIM','LTIMindtree'],['PERSISTENT','Persistent Systems'],['MPHASIS','Mphasis'],
+  ['COFORGE','Coforge'],['KPITTECH','KPIT Technologies'],['OFSS','Oracle Financial Services'],
+  ['NIITTECH','NIIT Technologies'],['HEXAWARE','Hexaware Technologies'],
+  ['AUROPHARMA','Aurobindo Pharma'],['LUPIN','Lupin'],['TORNTPHARM','Torrent Pharma'],
+  ['ALKEM','Alkem Laboratories'],['IPCALAB','IPCA Laboratories'],['ABBOTINDIA','Abbott India'],
+  ['GLAXO','GSK Pharmaceuticals'],['PFIZER','Pfizer'],['SANOFI','Sanofi India'],
+  ['ZYDUSLIFE','Zydus Lifesciences'],['GRANULES','Granules India'],['NATCOPHARM','Natco Pharma'],
+  ['BAJAJ-AUTO','Bajaj Auto'],['HEROMOTOCO','Hero MotoCorp'],['EICHERMOT','Eicher Motors'],
+  ['ASHOKLEY','Ashok Leyland'],['TVSMOTOR','TVS Motor Company'],['OLECTRA','Olectra Greentech'],
+  ['MOTHERSON','Samvardhana Motherson'],['BOSCHLTD','Bosch'],['MRF','MRF'],
+  ['APOLLOTYRE','Apollo Tyres'],['BALKRISIND','Balkrishna Industries'],
+  ['HINDPETRO','Hindustan Petroleum'],['CASTROLIND','Castrol India'],
+  ['DABUR','Dabur India'],['MARICO','Marico'],['GODREJCP','Godrej Consumer Products'],
+  ['EMAMILTD','Emami'],['COLPAL','Colgate-Palmolive'],['PGHH','Procter & Gamble'],
+  ['TATAPOWER','Tata Power'],['CESC','CESC Limited'],['TORNTPOWER','Torrent Power'],
+  ['ADANITRANS','Adani Transmission'],['PFC','Power Finance Corporation'],
+  ['RECLTD','REC Limited'],['SJVN','SJVN'],['NHPC','NHPC'],
+  ['DLF','DLF Limited'],['GODREJPROP','Godrej Properties'],['OBEROIRLTY','Oberoi Realty'],
+  ['PRESTIGE','Prestige Estates'],['PHOENIXLTD','Phoenix Mills'],
+  ['BRIGADE','Brigade Enterprises'],['IRFC','Indian Railway Finance'],['GMRINFRA','GMR Airports'],
+  ['IRCTC','IRCTC'],['INDIGO','IndiGo Airlines'],['SPICEJET','SpiceJet'],
+  ['ZOMATO','Zomato'],['NYKAA','Nykaa'],['PAYTM','Paytm'],['POLICYBZR','PB Fintech'],
+  ['DELHIVERY','Delhivery'],['CARTRADE','CarTrade Tech'],
+  ['HAVELLS','Havells India'],['VOLTAS','Voltas'],['BLUESTARCO','Blue Star'],
+  ['WHIRLPOOL','Whirlpool of India'],['SYMPHONY','Symphony'],
+  ['PAGEIND','Page Industries'],['MANYAVAR','Manyavar'],['TRENT','Trent'],
+  ['ABFRL','Aditya Birla Fashion'],['Raymond','Raymond'],
+  ['ASIANPAINT','Asian Paints'],['BERGERPAINTS','Berger Paints'],['AKZONOBEL','Akzo Nobel'],
+  ['PIDILITIND','Pidilite Industries'],['CHAMBLFERT','Chambal Fertilisers'],
+  ['DEEPAKNITR','Deepak Nitrite'],['NAVINFLUOR','Navin Fluorine'],['SRF','SRF Limited'],
+  ['AAVAS','Aavas Financiers'],['CANFINHOME','Can Fin Homes'],['LICHSGFIN','LIC Housing Finance'],
+  ['PNBHOUSING','PNB Housing Finance'],['HOMEFIRST','Home First Finance'],
+  ['MUTHOOTFIN','Muthoot Finance'],['MANAPPURAM','Manappuram Finance'],
+  ['CHOLAFIN','Cholamandalam Finance'],['M&MFIN','M&M Financial Services'],
+  ['SHRIRAMFIN','Shriram Finance'],['BAJAJHLDNG','Bajaj Holdings'],
+  ['ICICIPRULI','ICICI Prudential Life'],['HDFCAMC','HDFC AMC'],
+  ['ABSLAMC','Aditya Birla Sun Life AMC'],['NIACL','New India Assurance'],
+  ['M&M','Mahindra & Mahindra'],['TATACHEM','Tata Chemicals'],
+  ['ATUL','Atul Limited'],['ASTRAL','Astral'],['SUPREMEIND','Supreme Industries'],
+  ['GHCL','GHCL'],['ALKYLAMINE','Alkyl Amines'],['FINEORG','Fine Organics'],
+  ['DIXON','Dixon Technologies'],['AMBER','Amber Enterprises'],['KAYNES','Kaynes Technology'],
+  ['GRAVITA','Gravita India'],['CERA','Cera Sanitaryware'],
+  ['METROPOLIS','Metropolis Healthcare'],['THYROCARE','Thyrocare Technologies'],
+  ['LALPATHLAB','Dr. Lal PathLabs'],['KRSNAA','Krsnaa Diagnostics'],
+  ['NAUKRI','Info Edge'],['JUSTDIAL','Just Dial'],['INDIAMART','IndiaMART'],
+  ['AFFLE','Affle India'],['TANLA','Tanla Platforms'],['ROUTE','Route Mobile'],
+  ['HAPPSTMNDS','Happiest Minds'],['LTTS','L&T Technology Services'],
+  ['CYIENT','Cyient'],['MASTEK','Mastek'],['SONACOMS','Sona BLW Precision'],
+  ['TATAELXSI','Tata Elxsi'],['DATAMATICS','Datamatics Global'],
+  ['PIIND','PI Industries'],['UPL','UPL Limited'],['BAYER','Bayer CropScience'],
+  ['DHANUKA','Dhanuka Agritech'],['RALLIS','Rallis India'],
+  ['GOLD','Gold Bees'],['NIFTY','Nifty 50 ETF'],
+  ['NIFTY50','Nifty 50 Index']
+];
+
+// Build a lookup map for fast access
+var NSE_MAP = {};
+NSE_STOCKS.forEach(function(row){ NSE_MAP[row[0]] = row[1]; });
+
 var SECTORS = {
   'IT':     {label:'IT / Tech',   icon:'💻', symbols:['TCS','INFY','WIPRO','HCLTECH','TECHM','LTIM','PERSISTENT','MPHASIS','COFORGE','KPITTECH']},
   'BANK':   {label:'Banking',     icon:'🏦', symbols:['HDFCBANK','ICICIBANK','KOTAKBANK','AXISBANK','SBIN','INDUSINDBK','BANDHANBNK','FEDERALBNK','IDFCFIRSTB','AUBANK']},
@@ -1424,6 +1538,159 @@ function showToast(msg){
   t.textContent=msg; t.classList.add('show');
   setTimeout(function(){t.classList.remove('show');},2400);
 }
+
+// ── Analyze autocomplete ───────────────────────────────
+var _acIdx = -1; // currently highlighted row index
+
+// Build a sector reverse-map for labels
+var _symSector = {};
+Object.keys(SECTORS).forEach(function(sec){
+  if (sec === 'ALL') return;
+  SECTORS[sec].symbols.forEach(function(sym){ _symSector[sym] = SECTORS[sec].label; });
+});
+
+function acSearch(query) {
+  if (!query || query.length < 1) return [];
+  var q = query.toUpperCase().trim();
+  var results = [];
+  var seen    = {};
+
+  // 1. Exact ticker prefix match (highest priority)
+  NSE_STOCKS.forEach(function(row) {
+    var ticker = row[0], name = row[1];
+    if (ticker.startsWith(q) && !seen[ticker]) {
+      results.push({ ticker: ticker, name: name, matchOn: 'ticker' });
+      seen[ticker] = true;
+    }
+  });
+
+  // 2. Ticker contains query
+  NSE_STOCKS.forEach(function(row) {
+    var ticker = row[0], name = row[1];
+    if (!seen[ticker] && ticker.includes(q)) {
+      results.push({ ticker: ticker, name: name, matchOn: 'ticker' });
+      seen[ticker] = true;
+    }
+  });
+
+  // 3. Company name contains query (case-insensitive)
+  var ql = query.toLowerCase().trim();
+  NSE_STOCKS.forEach(function(row) {
+    var ticker = row[0], name = row[1];
+    if (!seen[ticker] && name.toLowerCase().includes(ql)) {
+      results.push({ ticker: ticker, name: name, matchOn: 'name' });
+      seen[ticker] = true;
+    }
+  });
+
+  return results.slice(0, 10); // max 10 suggestions
+}
+
+function acHighlight(text, query) {
+  // Wrap matching part in <mark>
+  var idx = text.toUpperCase().indexOf(query.toUpperCase());
+  if (idx < 0) return escHtml(text);
+  return escHtml(text.slice(0, idx))
+    + '<mark>' + escHtml(text.slice(idx, idx + query.length)) + '</mark>'
+    + escHtml(text.slice(idx + query.length));
+}
+
+function acRender(results, query) {
+  var drop = document.getElementById('acDrop');
+  if (!drop) return;
+  if (!results.length) {
+    drop.innerHTML = '<div class="ac-empty">No matches — try the full NSE ticker (e.g. HDFCBANK)</div>';
+    drop.style.display = 'block';
+    return;
+  }
+  drop.innerHTML = results.map(function(r, i) {
+    var sec = _symSector[r.ticker] || '';
+    // Highlight the matched part in ticker and name
+    var tickerHl = acHighlight(r.ticker, query);
+    var nameHl   = r.matchOn === 'name' ? acHighlight(r.name, query) : escHtml(r.name);
+    // Show scanner score badge if already scanned
+    var scored   = S.results[r.ticker];
+    var scoreBit = scored
+      ? ' <span style="font-size:11px;font-weight:700;color:'+CLS_COLOR[scored.classification]+'">'+scored.score+'</span>'
+      : '';
+    return '<div class="ac-item'+(i===_acIdx?' ac-active':'')+'" '
+      +'onmousedown="acPick(\''+r.ticker+'\')" '
+      +'onmouseover="acSetIdx('+i+')">'
+      +'<span class="ac-ticker">'+tickerHl+scoreBit+'</span>'
+      +'<span class="ac-name">'+nameHl+'</span>'
+      +(sec ? '<span class="ac-sector">'+sec+'</span>' : '')
+    +'</div>';
+  }).join('');
+  drop.style.display = 'block';
+}
+
+function acHide() {
+  var drop = document.getElementById('acDrop');
+  if (drop) drop.style.display = 'none';
+  _acIdx = -1;
+}
+
+function acSetIdx(i) {
+  _acIdx = i;
+  var drop = document.getElementById('acDrop');
+  if (!drop) return;
+  drop.querySelectorAll('.ac-item').forEach(function(el, j){
+    el.classList.toggle('ac-active', j === i);
+  });
+}
+
+function acOnInput(val) {
+  S.analyze.query = val.toUpperCase().trim();
+  _acIdx = -1;
+  var q = val.trim();
+  if (!q) { acHide(); return; }
+  var hits = acSearch(q);
+  acRender(hits, q);
+}
+
+function acOnKey(e) {
+  var drop  = document.getElementById('acDrop');
+  var items = drop ? drop.querySelectorAll('.ac-item') : [];
+  var total = items.length;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acSetIdx(Math.min(_acIdx + 1, total - 1));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acSetIdx(Math.max(_acIdx - 1, 0));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_acIdx >= 0 && items[_acIdx]) {
+      var chosen = items[_acIdx].onmousedown.toString().match(/acPick\('([^']+)'\)/);
+      // Use dataset instead — re-query from results
+      var hits = acSearch(S.analyze.query);
+      if (hits[_acIdx]) { acPick(hits[_acIdx].ticker); return; }
+    }
+    acCommit();
+  } else if (e.key === 'Escape') {
+    acHide();
+  }
+}
+
+function acPick(ticker) {
+  var inp = document.getElementById('analyzeInput');
+  if (inp) inp.value = ticker;
+  S.analyze.query = ticker;
+  acHide();
+  startAnalyze(ticker);
+}
+
+function acCommit() {
+  acHide();
+  startAnalyze();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('acWrap');
+  if (wrap && !wrap.contains(e.target)) acHide();
+});
 
 // ── Twilio WhatsApp notifications ──────────────────────
 function saveTwilio() {
@@ -2031,32 +2298,30 @@ function renderAnalyze(){
   var err = S.analyze.error;
   var loading = S.analyze.loading;
 
-  // Build <datalist> from all known NSE symbols
-  var opts = '';
-  Object.keys(SECTORS).forEach(function(sec){
-    if (sec==='ALL') return;
-    SECTORS[sec].symbols.forEach(function(sym){
-      opts += '<option value="'+sym+'">'+sym+' · '+SECTORS[sec].label+'</option>';
-    });
-  });
-
-  var searchBar = '<div style="padding:14px 16px;border-bottom:0.5px solid var(--border);'
-    +'position:sticky;top:0;background:var(--bg);z-index:10">'
-    +'<datalist id="symList">'+opts+'</datalist>'
-    +'<div class="add-row">'
-      +'<input class="add-input" id="analyzeInput" list="symList" type="text" '
-        +'placeholder="NSE symbol — TCS, RELIANCE, HDFCBANK…" '
-        +'value="'+escHtml(q)+'" '
-        +'style="text-transform:uppercase;font-size:14px" '
-        +'autocomplete="off" autocorrect="off" spellcheck="false" '
-        +'oninput="S.analyze.query=this.value.toUpperCase().trim()" '
-        +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();startAnalyze();}">'
-      +'<button class="add-btn" onclick="startAnalyze()" '+(loading?'disabled':'')+' '
-        +'style="min-width:64px;font-size:13px">'+(loading?'…':'Analyze')+'</button>'
-    +'</div>'
-    +(res&&!loading?'<div style="font-size:12px;color:var(--txt3);margin-top:8px;font-family:DM Mono,monospace">'
-      +'Tap another symbol to re-analyze · data via '+srcLabel(res.source||'yahoo')+'</div>':'')
-  +'</div>';
+  var searchBar =
+    '<div style="padding:16px 20px 14px;border-bottom:1px solid var(--border);'
+      +'position:sticky;top:0;background:var(--bg);z-index:10">'
+      +'<div class="ac-wrap" id="acWrap">'
+        +'<div class="add-row">'
+          +'<input class="add-input" id="analyzeInput" type="text" '
+            +'placeholder="Type ticker or company — TCS, HDFC Bank, Infosys…" '
+            +'value="'+escHtml(q)+'" '
+            +'style="text-transform:uppercase;font-size:14px" '
+            +'autocomplete="off" autocorrect="off" spellcheck="false" '
+            +'oninput="acOnInput(this.value)" '
+            +'onkeydown="acOnKey(event)">'
+          +'<button class="add-btn" onclick="acCommit()" '+(loading?'disabled':'')+' '
+            +'style="min-width:72px;font-size:13px">'+(loading?'…':'Analyze')+'</button>'
+        +'</div>'
+        +'<div class="ac-drop" id="acDrop" style="display:none"></div>'
+      +'</div>'
+      +(res&&!loading
+        ? '<div style="font-size:12px;color:var(--txt3);margin-top:8px;font-family:var(--font-mono)">'
+            +'Showing: <b style="color:var(--txt)">'+escHtml(res.symbol)+'</b>'
+            +' — '+(NSE_MAP[res.symbol]||'')
+            +' · via '+srcLabel(res.source||'yahoo')+'</div>'
+        : '')
+    +'</div>';
 
   var body = '';
   if (loading) {
