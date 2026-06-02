@@ -976,82 +976,280 @@ var S = {
 // ── NSE Symbol → Company name dictionary ──────────────
 // Used for autocomplete in Analyze. Ticker + full name both searchable.
 var NSE_STOCKS = [
+  // ── Nifty 50 ──────────────────────────────────────────
   ['RELIANCE','Reliance Industries'],['TCS','Tata Consultancy Services'],
   ['HDFCBANK','HDFC Bank'],['INFY','Infosys'],['ICICIBANK','ICICI Bank'],
   ['HINDUNILVR','Hindustan Unilever'],['SBIN','State Bank of India'],
   ['BHARTIARTL','Bharti Airtel'],['ITC','ITC Limited'],['KOTAKBANK','Kotak Mahindra Bank'],
   ['LT','Larsen & Toubro'],['AXISBANK','Axis Bank'],['BAJFINANCE','Bajaj Finance'],
-  ['MARUTI','Maruti Suzuki'],['WIPRO','Wipro'],['ONGC','ONGC'],
-  ['NTPC','NTPC Limited'],['SUNPHARMA','Sun Pharmaceutical'],['TATAMOTORS','Tata Motors'],
-  ['ADANIPORTS','Adani Ports'],['ULTRACEMCO','UltraTech Cement'],['NESTLEIND','Nestle India'],
-  ['TITAN','Titan Company'],['HCLTECH','HCL Technologies'],['TECHM','Tech Mahindra'],
-  ['BAJAJFINSV','Bajaj Finserv'],['DRREDDY','Dr. Reddys Laboratories'],
-  ['CIPLA','Cipla'],['DIVISLAB','Divis Laboratories'],['HDFCLIFE','HDFC Life Insurance'],
-  ['SBILIFE','SBI Life Insurance'],['COALINDIA','Coal India'],['POWERGRID','Power Grid'],
+  ['MARUTI','Maruti Suzuki India'],['WIPRO','Wipro'],['ONGC','Oil and Natural Gas Corporation'],
+  ['NTPC','NTPC Limited'],['SUNPHARMA','Sun Pharmaceutical Industries'],
+  ['TATAMOTORS','Tata Motors'],['ADANIPORTS','Adani Ports and SEZ'],
+  ['ULTRACEMCO','UltraTech Cement'],['NESTLEIND','Nestle India'],['TITAN','Titan Company'],
+  ['HCLTECH','HCL Technologies'],['TECHM','Tech Mahindra'],['BAJAJFINSV','Bajaj Finserv'],
+  ['DRREDDY','Dr Reddys Laboratories'],['CIPLA','Cipla'],['DIVISLAB','Divis Laboratories'],
+  ['HDFCLIFE','HDFC Life Insurance'],['SBILIFE','SBI Life Insurance'],
+  ['COALINDIA','Coal India'],['POWERGRID','Power Grid Corporation'],
   ['TATACONSUM','Tata Consumer Products'],['GRASIM','Grasim Industries'],
-  ['BRITANNIA','Britannia Industries'],['APOLLOHOSP','Apollo Hospitals'],
+  ['BRITANNIA','Britannia Industries'],['APOLLOHOSP','Apollo Hospitals Enterprise'],
   ['HINDALCO','Hindalco Industries'],['TATASTEEL','Tata Steel'],
-  ['ADANIENT','Adani Enterprises'],['ADANIGREEN','Adani Green Energy'],
-  ['BPCL','Bharat Petroleum'],['IOC','Indian Oil Corporation'],
-  ['VEDL','Vedanta'],['SAIL','Steel Authority of India'],
-  ['NMDC','NMDC Limited'],['JSWSTEEL','JSW Steel'],['JINDALSTEL','Jindal Steel'],
-  ['INDUSINDBK','IndusInd Bank'],['BANDHANBNK','Bandhan Bank'],
-  ['FEDERALBNK','Federal Bank'],['IDFCFIRSTB','IDFC First Bank'],['AUBANK','AU Small Finance Bank'],
-  ['YESBANK','Yes Bank'],['PNB','Punjab National Bank'],['BANKBARODA','Bank of Baroda'],
-  ['CANBK','Canara Bank'],['UNIONBANK','Union Bank of India'],['IOBK','IOB'],
+  ['ADANIENT','Adani Enterprises'],['BPCL','Bharat Petroleum Corporation'],
+  ['M&M','Mahindra and Mahindra'],['HEROMOTOCO','Hero MotoCorp'],
+  ['BAJAJ-AUTO','Bajaj Auto'],['EICHERMOT','Eicher Motors'],
+  ['SHRIRAMFIN','Shriram Finance'],['JSWSTEEL','JSW Steel'],
+  ['INDUSINDBK','IndusInd Bank'],['TATAPOWER','Tata Power Company'],
+  // ── Nifty Next 50 ─────────────────────────────────────
+  ['ADANIGREEN','Adani Green Energy'],['ADANITRANS','Adani Transmission'],
+  ['AMBUJACEM','Ambuja Cements'],['ICICIGI','ICICI Lombard General Insurance'],
+  ['ICICIPRULI','ICICI Prudential Life Insurance'],['IOC','Indian Oil Corporation'],
+  ['IRCTC','Indian Railway Catering and Tourism'],['LICI','LIC of India'],
+  ['LODHA','Macrotech Developers'],['NAUKRI','Info Edge India'],
+  ['PFC','Power Finance Corporation'],['PIDILITIND','Pidilite Industries'],
+  ['RECLTD','REC Limited'],['SBICARD','SBI Cards and Payment Services'],
+  ['SIEMENS','Siemens India'],['TRENT','Trent'],['VEDL','Vedanta'],
+  ['VMART','V-Mart Retail'],['ZOMATO','Zomato'],['HAL','Hindustan Aeronautics'],
+  ['BEL','Bharat Electronics'],['BHEL','Bharat Heavy Electricals'],
+  ['CONCOR','Container Corporation of India'],['DMART','Avenue Supermarts'],
+  ['GODREJCP','Godrej Consumer Products'],['HAVELLS','Havells India'],
+  ['MARICO','Marico'],['NYKAA','FSN E-Commerce Ventures'],
+  ['PAYTM','One 97 Communications'],['POLICYBZR','PB Fintech'],
+  ['TORNTPHARM','Torrent Pharmaceuticals'],['VOLTAS','Voltas'],
+  ['ZEEL','Zee Entertainment Enterprises'],
+  // ── Banking & Finance ──────────────────────────────────
+  ['BANDHANBNK','Bandhan Bank'],['FEDERALBNK','Federal Bank'],
+  ['IDFCFIRSTB','IDFC First Bank'],['AUBANK','AU Small Finance Bank'],
+  ['YESBANK','Yes Bank'],['PNB','Punjab National Bank'],
+  ['BANKBARODA','Bank of Baroda'],['CANBK','Canara Bank'],
+  ['UNIONBANK','Union Bank of India'],['INDIANB','Indian Bank'],
+  ['IDBI','IDBI Bank'],['MAHABANK','Bank of Maharashtra'],
+  ['CENTRALBK','Central Bank of India'],['UCO','UCO Bank'],
+  ['UCOBANK','UCO Bank'],['DCBBANK','DCB Bank'],
+  ['KARURVYSYA','Karur Vysya Bank'],['TMKFINL','TMK Finance'],
+  ['SOUTHBANK','South Indian Bank'],['CSBBANK','CSB Bank'],
+  ['RBLBANK','RBL Bank'],['LAKSHVILAS','Lakshmi Vilas Bank'],
+  ['EQUITASBNK','Equitas Small Finance Bank'],['UJJIVANSFB','Ujjivan Small Finance Bank'],
+  ['SURYODAY','Suryoday Small Finance Bank'],['ESAFSFB','ESAF Small Finance Bank'],
+  ['FINOPB','Fino Payments Bank'],['PAYTMBANK','Paytm Payments Bank'],
+  ['BAJAJHLDNG','Bajaj Holdings and Investment'],['CHOLAFIN','Cholamandalam Investment and Finance'],
+  ['M&MFIN','Mahindra and Mahindra Financial Services'],['MUTHOOTFIN','Muthoot Finance'],
+  ['MANAPPURAM','Manappuram Finance'],['AAVAS','Aavas Financiers'],
+  ['CANFINHOME','Can Fin Homes'],['LICHSGFIN','LIC Housing Finance'],
+  ['PNBHOUSING','PNB Housing Finance'],['HOMEFIRST','Home First Finance Company'],
+  ['REPCO','Repco Home Finance'],['APTUS','Aptus Value Housing Finance'],
+  ['SBFC','SBFC Finance'],['CREDITACC','CreditAccess Grameen'],
+  ['ARIHANTCAP','Arihant Capital Markets'],['MOTILALOFS','Motilal Oswal Financial Services'],
+  ['EDELWEISS','Edelweiss Financial Services'],['GEOJITFSL','Geojit Financial Services'],
+  ['ANANGSHA','Anangsha Finvest'],['ANGELONE','Angel One'],
+  ['5PAISA','5paisa Capital'],['NUVAMA','Nuvama Wealth Management'],
+  ['HDFCAMC','HDFC Asset Management Company'],['ABSLAMC','Aditya Birla Sun Life AMC'],
+  ['NAM-INDIA','Nippon Life India Asset Management'],['UTIAMC','UTI Asset Management Company'],
+  ['NIACL','New India Assurance Company'],['GICRE','General Insurance Corporation'],
+  ['ICICIGI','ICICI Lombard General Insurance'],['STARHEALTH','Star Health Insurance'],
+  ['GODIGIT','Go Digit General Insurance'],
+  // ── IT & Technology ────────────────────────────────────
   ['LTIM','LTIMindtree'],['PERSISTENT','Persistent Systems'],['MPHASIS','Mphasis'],
   ['COFORGE','Coforge'],['KPITTECH','KPIT Technologies'],['OFSS','Oracle Financial Services'],
-  ['NIITTECH','NIIT Technologies'],['HEXAWARE','Hexaware Technologies'],
-  ['AUROPHARMA','Aurobindo Pharma'],['LUPIN','Lupin'],['TORNTPHARM','Torrent Pharma'],
-  ['ALKEM','Alkem Laboratories'],['IPCALAB','IPCA Laboratories'],['ABBOTINDIA','Abbott India'],
+  ['TATAELXSI','Tata Elxsi'],['LTTS','L&T Technology Services'],
+  ['CYIENT','Cyient'],['MASTEK','Mastek'],['HAPPSTMNDS','Happiest Minds Technologies'],
+  ['HEXAWARE','Hexaware Technologies'],['NIIT','NIIT Learning Systems'],
+  ['RATEGAIN','RateGain Travel Technologies'],['TANLA','Tanla Platforms'],
+  ['ROUTE','Route Mobile'],['AFFLE','Affle India'],['INDIAMART','IndiaMART InterMESH'],
+  ['JUSTDIAL','Just Dial'],['NAUKRI','Info Edge India'],
+  ['ZENSAR','Zensar Technologies'],['ECLERX','eClerx Services'],
+  ['MSTCLTD','MSTC Limited'],['DATAMATICS','Datamatics Global Services'],
+  ['INTELLECT','Intellect Design Arena'],['NUCLEUS','Nucleus Software Exports'],
+  ['NEWGEN','Newgen Software Technologies'],['RAMCO','Ramco Systems'],
+  ['ZENSARTECH','Zensar Technologies'],['BIRLASOFT','Birlasoft'],
+  ['INFOEDGE','Info Edge India'],['CARTRADE','CarTrade Tech'],
+  ['DELHIVERY','Delhivery'],['LATENTVIEW','Latent View Analytics'],
+  ['XCHANGING','Xchanging Solutions'],['SAKSOFT','Saksoft'],
+  ['SUBEXLTD','Subex Limited'],['SASKEN','Sasken Technologies'],
+  ['ONMOBILE','OnMobile Global'],['MAHINDCIE','Mahindra CIE Automotive'],
+  // ── Pharma & Healthcare ────────────────────────────────
+  ['AUROPHARMA','Aurobindo Pharma'],['LUPIN','Lupin'],['ALKEM','Alkem Laboratories'],
+  ['IPCALAB','IPCA Laboratories'],['ABBOTINDIA','Abbott India'],
   ['GLAXO','GSK Pharmaceuticals'],['PFIZER','Pfizer'],['SANOFI','Sanofi India'],
   ['ZYDUSLIFE','Zydus Lifesciences'],['GRANULES','Granules India'],['NATCOPHARM','Natco Pharma'],
-  ['BAJAJ-AUTO','Bajaj Auto'],['HEROMOTOCO','Hero MotoCorp'],['EICHERMOT','Eicher Motors'],
-  ['ASHOKLEY','Ashok Leyland'],['TVSMOTOR','TVS Motor Company'],['OLECTRA','Olectra Greentech'],
-  ['MOTHERSON','Samvardhana Motherson'],['BOSCHLTD','Bosch'],['MRF','MRF'],
-  ['APOLLOTYRE','Apollo Tyres'],['BALKRISIND','Balkrishna Industries'],
-  ['HINDPETRO','Hindustan Petroleum'],['CASTROLIND','Castrol India'],
-  ['DABUR','Dabur India'],['MARICO','Marico'],['GODREJCP','Godrej Consumer Products'],
-  ['EMAMILTD','Emami'],['COLPAL','Colgate-Palmolive'],['PGHH','Procter & Gamble'],
-  ['TATAPOWER','Tata Power'],['CESC','CESC Limited'],['TORNTPOWER','Torrent Power'],
-  ['ADANITRANS','Adani Transmission'],['PFC','Power Finance Corporation'],
-  ['RECLTD','REC Limited'],['SJVN','SJVN'],['NHPC','NHPC'],
+  ['BIOCON','Biocon'],['STRIDES','Strides Pharma Science'],['LAURUSLABS','Laurus Labs'],
+  ['GLENMARK','Glenmark Pharmaceuticals'],['SUNPHARMA','Sun Pharmaceutical Industries'],
+  ['TORNTPHARM','Torrent Pharmaceuticals'],['METROPOLIS','Metropolis Healthcare'],
+  ['THYROCARE','Thyrocare Technologies'],['LALPATHLAB','Dr Lal PathLabs'],
+  ['APOLLOHOSP','Apollo Hospitals Enterprise'],['FORTIS','Fortis Healthcare'],
+  ['MAXHEALTH','Max Healthcare Institute'],['RAINBOW','Rainbow Childrens Medicare'],
+  ['KRSNAA','Krsnaa Diagnostics'],['VIJAYA','Vijaya Diagnostic Centre'],
+  ['MEDANTA','Global Health'],['HESTER','Hester Biosciences'],
+  ['SEQUENT','SeQuent Scientific'],['SUVEN','Suven Pharmaceuticals'],
+  ['SOLARA','Solara Active Pharma Sciences'],['IOLCP','IOL Chemicals and Pharmaceuticals'],
+  ['JUBLERL','Jubilant Life Sciences'],['JUBLPHARMA','Jubilant Pharmova'],
+  ['PIRAMALPH','Piramal Pharma'],['WOCKPHARMA','Wockhardt'],
+  ['AJANTPHARM','Ajanta Pharmaceuticals'],['EMCURE','Emcure Pharmaceuticals'],
+  ['MANKIND','Mankind Pharma'],['ERIS','Eris Lifesciences'],
+  ['JB','JB Chemicals and Pharmaceuticals'],['CAPLIPOINT','Caplin Point Laboratories'],
+  ['NEULANDLAB','Neuland Laboratories'],['DISHMAN','Dishman Carbogen Amcis'],
+  ['FDC','FDC Limited'],['BLISSIND','Bliss GVS Pharma'],
+  // ── Auto & EV ──────────────────────────────────────────
+  ['ASHOKLEY','Ashok Leyland'],['TVSMOTOR','TVS Motor Company'],
+  ['OLECTRA','Olectra Greentech'],['MOTHERSON','Samvardhana Motherson International'],
+  ['BOSCHLTD','Bosch'],['MRF','MRF'],['APOLLOTYRE','Apollo Tyres'],
+  ['BALKRISIND','Balkrishna Industries'],['CEAT','CEAT'],['JKTYRE','JK Tyre and Industries'],
+  ['EXIDEIND','Exide Industries'],['AMARARAJA','Amara Raja Energy and Mobility'],
+  ['SONACOMS','Sona BLW Precision Forgings'],['CRAFTSMAN','Craftsman Automation'],
+  ['SUPRAJIT','Suprajit Engineering'],['ENDURANCE','Endurance Technologies'],
+  ['SUNDRMFAST','Sundram Fasteners'],['BHAGERIA','Bhageria Industries'],
+  ['SETCO','Setco Automotive'],['GABRIEL','Gabriel India'],
+  ['LUMAX','Lumax Industries'],['LUMAXIND','Lumax Auto Technologies'],
+  ['WABCO','ZF Commercial Vehicle Control Systems'],['RICO','Rico Auto Industries'],
+  ['MINDA','Minda Corporation'],['MINDACORP','Minda Corporation'],
+  ['SCHAEFFLER','Schaeffler India'],['SKF','SKF India'],['TIMKEN','Timken India'],
+  ['ESCORTS','Escorts Kubota'],['MAHIND','Mahindra and Mahindra'],
+  ['TATAMTRDVR','Tata Motors DVR'],['FORCEMOT','Force Motors'],
+  ['SMLISUZU','SML Isuzu'],['VSTIND','VST Industries'],
+  ['PVRINOX','PVR Inox'],['IEX','Indian Energy Exchange'],
+  // ── FMCG & Consumer ───────────────────────────────────
+  ['DABUR','Dabur India'],['EMAMILTD','Emami'],['COLPAL','Colgate-Palmolive India'],
+  ['PGHH','Procter and Gamble Hygiene and Health Care'],['GCPL','Godrej Consumer Products'],
+  ['BAJAJCON','Bajaj Consumer Care'],['JYOTHYLAB','Jyothy Labs'],
+  ['VBL','Varun Beverages'],['RADICO','Radico Khaitan'],['MCDOWELL-N','United Spirits'],
+  ['GLOBUSSPR','Globus Spirits'],['GMMPFAUDLR','GMM Pfaudler'],
+  ['NESCO','Nesco'],['VENKEYS','Venkys India'],['AVANTIFEED','Avanti Feeds'],
+  ['WATERBASE','Waterbase'],['ZYDUSWELL','Zydus Wellness'],
+  ['SUDARSCHEM','Sudarshan Chemical Industries'],['GALAXYSUR','Galaxy Surfactants'],
+  ['VSTIND','VST Industries'],['GODFRYPHLP','Godfrey Phillips India'],
+  ['KAJARIACER','Kajaria Ceramics'],['ORIENTELEC','Orient Electric'],
+  ['NILKAMAL','Nilkamal'],['TTKPRESTIG','TTK Prestige'],
+  ['HAWKINCOOK','Hawkins Cookers'],['PIONDISTIL','Pioneer Distilleries'],
+  ['PAGEIND','Page Industries'],['ABFRL','Aditya Birla Fashion and Retail'],
+  ['MANYAVAR','Vedant Fashions'],['RAYMOND','Raymond'],['ARVIND','Arvind'],
+  ['WELSPUNIND','Welspun India'],['SWARAJENG','Swaraj Engines'],
+  // ── Energy & Power ─────────────────────────────────────
+  ['HINDPETRO','Hindustan Petroleum Corporation'],['CASTROLIND','Castrol India'],
+  ['CESC','CESC Limited'],['TORNTPOWER','Torrent Power'],
+  ['ADANIPOWER','Adani Power'],['RPOWER','Reliance Power'],
+  ['SJVN','SJVN Limited'],['NHPC','NHPC Limited'],['NLCINDIA','NLC India'],
+  ['JSWENERGY','JSW Energy'],['GREENKO','Greenko Energy'],
+  ['INOXWIND','Inox Wind'],['SUZLON','Suzlon Energy'],['ORIENTGREEN','Orient Green Power'],
+  ['WAAREEENER','Waaree Energies'],['PREMIER','Premier Energies'],
+  ['SGBEL','Sagardeep Alloys'],['KPI','KPI Green Energy'],
+  ['GAEL','Gujarat Ambuja Exports'],
+  // ── Infrastructure & Real Estate ───────────────────────
   ['DLF','DLF Limited'],['GODREJPROP','Godrej Properties'],['OBEROIRLTY','Oberoi Realty'],
-  ['PRESTIGE','Prestige Estates'],['PHOENIXLTD','Phoenix Mills'],
-  ['BRIGADE','Brigade Enterprises'],['IRFC','Indian Railway Finance'],['GMRINFRA','GMR Airports'],
-  ['IRCTC','IRCTC'],['INDIGO','IndiGo Airlines'],['SPICEJET','SpiceJet'],
-  ['ZOMATO','Zomato'],['NYKAA','Nykaa'],['PAYTM','Paytm'],['POLICYBZR','PB Fintech'],
-  ['DELHIVERY','Delhivery'],['CARTRADE','CarTrade Tech'],
-  ['HAVELLS','Havells India'],['VOLTAS','Voltas'],['BLUESTARCO','Blue Star'],
+  ['PRESTIGE','Prestige Estates Projects'],['PHOENIXLTD','Phoenix Mills'],
+  ['BRIGADE','Brigade Enterprises'],['IRFC','Indian Railway Finance Corporation'],
+  ['GMRINFRA','GMR Airports Infrastructure'],['ADANIPORTS','Adani Ports and SEZ'],
+  ['ASHIANA','Ashiana Housing'],['SOBHA','Sobha'],['MAHLIFE','Mahindra Lifespace Developers'],
+  ['KOLTEPATIL','Kolte-Patil Developers'],['NCLIND','NCL Industries'],
+  ['SUNTECK','Sunteck Realty'],['ANANTRAJ','Anant Raj'],['ELDEHSG','Eldeco Housing and Industries'],
+  ['AHLUCONT','Ahluwalia Contracts India'],['NCC','NCC Limited'],
+  ['HGINFRA','H.G. Infra Engineering'],['PNCINFRA','PNC Infratech'],
+  ['KNRCON','KNR Constructions'],['IRB','IRB Infrastructure Developers'],
+  ['SADBHAV','Sadbhav Engineering'],['GAYAHWS','Gayatri Projects'],
+  ['RINFRA','Reliance Infrastructure'],['WELSPUNLIV','Welspun Living'],
+  // ── Metals & Mining ────────────────────────────────────
+  ['SAIL','Steel Authority of India'],['NMDC','NMDC Limited'],
+  ['JINDALSTEL','Jindal Steel and Power'],['JSPL','Jindal Steel and Power'],
+  ['NATIONALUM','National Aluminium Company'],['HINDZINC','Hindustan Zinc'],
+  ['MOIL','MOIL Limited'],['MIDHANI','Mishra Dhatu Nigam'],
+  ['RATNAMANI','Ratnamani Metals and Tubes'],['KALYANKJIL','Kalyan Jewellers India'],
+  ['MANORAMA','Manorama Industries'],['TIINDIA','Tube Investments of India'],
+  ['SHYAMMETL','Shyam Metalics and Energy'],['APL','APL Apollo Tubes'],
+  ['APLAPOLLO','APL Apollo Tubes'],['GALLANTT','Gallantt Ispat'],
+  ['JSWHL','JSW Holdings'],['USHA','Usha Martin'],
+  // ── Chemicals ─────────────────────────────────────────
+  ['SRF','SRF Limited'],['DEEPAKNITR','Deepak Nitrite'],['NAVINFLUOR','Navin Fluorine International'],
+  ['ATUL','Atul Limited'],['TATACHEM','Tata Chemicals'],
+  ['CHAMBLFERT','Chambal Fertilisers and Chemicals'],['COROMANDEL','Coromandel International'],
+  ['GNFC','Gujarat Narmada Valley Fertilizers'],['NFL','National Fertilizers'],
+  ['RCF','Rashtriya Chemicals and Fertilizers'],['GHCL','GHCL Limited'],
+  ['ALKYLAMINE','Alkyl Amines Chemicals'],['FINEORG','Fine Organics Industries'],
+  ['VINYSCHEM','Vinati Organics'],['VINATIORGA','Vinati Organics'],
+  ['LXCHEM','Laxmi Organic Industries'],['ROSSARI','Rossari Biotech'],
+  ['CLEAN','Clean Science and Technology'],['NOCIL','NOCIL Limited'],
+  ['BALCH','Balaji Amines'],['TATACHEM','Tata Chemicals'],
+  ['PIDILITIND','Pidilite Industries'],['BASF','BASF India'],
+  ['BAYER','Bayer CropScience'],['PIIND','PI Industries'],
+  ['UPL','UPL Limited'],['DHANUKA','Dhanuka Agritech'],
+  ['RALLIS','Rallis India'],['SUMICHEM','Sumitomo Chemical India'],
+  ['ASTERDM','Aster DM Healthcare'],['SUPRIYA','Supriya Lifescience'],
+  ['NEOGEN','Neogen Chemicals'],['ANURAS','Anuras Industries'],
+  // ── Cement & Building Materials ────────────────────────
+  ['AMBUJACEM','Ambuja Cements'],['ACC','ACC Limited'],['SHREECEM','Shree Cement'],
+  ['RAMCOCEM','Ramco Cements'],['HEIDELBERG','HeidelbergCement India'],
+  ['JKCEMENT','JK Cement'],['ORIENT','Orient Cement'],
+  ['PRISM','Prism Johnson'],['BIRLACORPN','Birla Corporation'],
+  ['DECCANCE','Deccan Cements'],['MANGCMFIN','Mangalam Cement'],
+  ['KAJARIACER','Kajaria Ceramics'],['CERA','Cera Sanitaryware'],['GRINDWELL','Grindwell Norton'],
+  ['ASTRAL','Astral Limited'],['SUPREMEIND','Supreme Industries'],
+  ['APOLLOPIPE','Apollo Pipes'],['FINOLEX','Finolex Industries'],
+  ['PRINCEPIPE','Prince Pipes and Fittings'],
+  ['ORIENTBELL','Orient Bell'],['SOMANYCER','Somany Ceramics'],
+  ['HSIL','HSIL Limited'],['POKARNA','Pokarna Limited'],
+  // ── Capital Goods & Defence ────────────────────────────
+  ['HAL','Hindustan Aeronautics'],['BEL','Bharat Electronics'],
+  ['BHEL','Bharat Heavy Electricals'],['COCHINSHIP','Cochin Shipyard'],
+  ['MAZAGON','Mazagon Dock Shipbuilders'],['GRSE','Garden Reach Shipbuilders'],
+  ['BDL','Bharat Dynamics'],['BEML','BEML Limited'],
+  ['DATAPATTNS','Data Patterns India'],['PARAS','Paras Defence and Space Technologies'],
+  ['IDEAFORGE','ideaForge Technology'],['SOLOMONPWR','Solomon Power Equipment'],
+  ['THERMAX','Thermax Limited'],['ABB','ABB India'],['CUMMINSIND','Cummins India'],
+  ['ELGI','Elgi Equipments'],['GREAVESCOT','Greaves Cotton'],
+  ['KSB','KSB Limited'],['KIRLOSENG','Kirloskar Electric Company'],
+  ['KENNAMET','Kennametal India'],['INGERSOLL','Ingersoll Rand India'],
+  ['TRIL','Transformers and Rectifiers India'],['ISGEC','ISGEC Heavy Engineering'],
+  ['TEXRAIL','Texmaco Rail and Engineering'],['RAILVIKASA','Rail Vikas Nigam'],
+  ['RVNL','Rail Vikas Nigam Limited'],['IRCON','IRCON International'],
+  ['NBCC','NBCC India'],['NPCI','National Payments Corporation'],
+  // ── Media & Telecom ────────────────────────────────────
+  ['ZEEL','Zee Entertainment Enterprises'],['SUNTV','Sun TV Network'],
+  ['NETWORK18','Network18 Media and Investments'],['TV18BRDCST','TV18 Broadcast'],
+  ['NDTV','New Delhi Television'],['JAGRAN','Jagran Prakashan'],
+  ['DBCORP','DB Corp'],['HATHWAY','Hathway Cable and Datacom'],
+  ['GTLINFRA','GTL Infrastructure'],['TATACOMM','Tata Communications'],
+  ['RAILTEL','RailTel Corporation of India'],['MTNL','Mahanagar Telephone Nigam'],
+  ['BSNL','Bharat Sanchar Nigam Limited'],
+  // ── Consumer Durables & Electronics ───────────────────
+  ['DIXON','Dixon Technologies India'],['AMBER','Amber Enterprises India'],
+  ['KAYNES','Kaynes Technology India'],['BLUESTARCO','Blue Star'],
   ['WHIRLPOOL','Whirlpool of India'],['SYMPHONY','Symphony'],
-  ['PAGEIND','Page Industries'],['MANYAVAR','Manyavar'],['TRENT','Trent'],
-  ['ABFRL','Aditya Birla Fashion'],['Raymond','Raymond'],
-  ['ASIANPAINT','Asian Paints'],['BERGERPAINTS','Berger Paints'],['AKZONOBEL','Akzo Nobel'],
-  ['PIDILITIND','Pidilite Industries'],['CHAMBLFERT','Chambal Fertilisers'],
-  ['DEEPAKNITR','Deepak Nitrite'],['NAVINFLUOR','Navin Fluorine'],['SRF','SRF Limited'],
-  ['AAVAS','Aavas Financiers'],['CANFINHOME','Can Fin Homes'],['LICHSGFIN','LIC Housing Finance'],
-  ['PNBHOUSING','PNB Housing Finance'],['HOMEFIRST','Home First Finance'],
-  ['MUTHOOTFIN','Muthoot Finance'],['MANAPPURAM','Manappuram Finance'],
-  ['CHOLAFIN','Cholamandalam Finance'],['M&MFIN','M&M Financial Services'],
-  ['SHRIRAMFIN','Shriram Finance'],['BAJAJHLDNG','Bajaj Holdings'],
-  ['ICICIPRULI','ICICI Prudential Life'],['HDFCAMC','HDFC AMC'],
-  ['ABSLAMC','Aditya Birla Sun Life AMC'],['NIACL','New India Assurance'],
-  ['M&M','Mahindra & Mahindra'],['TATACHEM','Tata Chemicals'],
-  ['ATUL','Atul Limited'],['ASTRAL','Astral'],['SUPREMEIND','Supreme Industries'],
-  ['GHCL','GHCL'],['ALKYLAMINE','Alkyl Amines'],['FINEORG','Fine Organics'],
-  ['DIXON','Dixon Technologies'],['AMBER','Amber Enterprises'],['KAYNES','Kaynes Technology'],
-  ['GRAVITA','Gravita India'],['CERA','Cera Sanitaryware'],
-  ['METROPOLIS','Metropolis Healthcare'],['THYROCARE','Thyrocare Technologies'],
-  ['LALPATHLAB','Dr. Lal PathLabs'],['KRSNAA','Krsnaa Diagnostics'],
-  ['NAUKRI','Info Edge'],['JUSTDIAL','Just Dial'],['INDIAMART','IndiaMART'],
-  ['AFFLE','Affle India'],['TANLA','Tanla Platforms'],['ROUTE','Route Mobile'],
-  ['HAPPSTMNDS','Happiest Minds'],['LTTS','L&T Technology Services'],
-  ['CYIENT','Cyient'],['MASTEK','Mastek'],['SONACOMS','Sona BLW Precision'],
-  ['TATAELXSI','Tata Elxsi'],['DATAMATICS','Datamatics Global'],
-  ['PIIND','PI Industries'],['UPL','UPL Limited'],['BAYER','Bayer CropScience'],
-  ['DHANUKA','Dhanuka Agritech'],['RALLIS','Rallis India'],
-  ['GOLD','Gold Bees'],['NIFTY','Nifty 50 ETF'],
-  ['NIFTY50','Nifty 50 Index']
+  ['HAVELLS','Havells India'],['VOLTAS','Voltas'],['ORIENTELEC','Orient Electric'],
+  ['VGUARD','V-Guard Industries'],['CROMPTON','Crompton Greaves Consumer Electricals'],
+  ['BAJAJELEC','Bajaj Electricals'],['SYRMA','Syrma SGS Technology'],
+  ['PGEL','PG Electroplast'],['ELCID','Elcid Investments'],
+  ['VEDANT','Vedant Fashions'],['TITAN','Titan Company'],
+  ['KALYAN','Kalyan Jewellers India'],['SENCO','Senco Gold'],
+  ['THANGAMAYL','Thangamayil Jewellery'],['PCJEWELLER','PC Jeweller'],
+  ['RAJESHEXPO','Rajesh Exports'],['GITANJALI','Gitanjali Gems'],
+  // ── Hotels & Hospitality ───────────────────────────────
+  ['INDHOTEL','Indian Hotels Company'],['EIHOTEL','EIH Limited'],
+  ['LEMONTREE','Lemon Tree Hotels'],['CHALET','Chalet Hotels'],
+  ['MAHINDHOLIDAY','Mahindra Holidays and Resorts'],['ROYALSTAG','Royal Stag'],
+  ['TAJGVK','Taj GVK Hotels and Resorts'],['ORIENTHOT','Oriental Hotels'],
+  ['DEVYANI','Devyani International'],['JUBLFOOD','Jubilant Foodworks'],
+  ['WESTLIFE','Westlife Foodworld'],['BARBEQUE','Barbeque Nation Hospitality'],
+  ['RESTAURANT','Restaurant Brands Asia'],['SAPPHIRE','Sapphire Foods India'],
+  // ── Logistics & Shipping ──────────────────────────────
+  ['CONCOR','Container Corporation of India'],['GATI','Gati Limited'],
+  ['MAHLOG','Mahindra Logistics'],['BLUEDART','Blue Dart Express'],
+  ['TCIEXP','TCI Express'],['TCI','Transport Corporation of India'],
+  ['SNOWMAN','Snowman Logistics'],['SPANDANA','Spandana Sphoorty Financial'],
+  ['ALLCARGO','Allcargo Logistics'],['GTPL','GTPL Hathway'],
+  // ── Aviation ──────────────────────────────────────────
+  ['INDIGO','InterGlobe Aviation'],['SPICEJET','SpiceJet'],
+  ['AIRINDIA','Air India'],['BLUEDART','Blue Dart Express'],
+  // ── Agriculture ───────────────────────────────────────
+  ['KSCL','Kaveri Seed Company'],['NATH','Nath Seeds'],
+  ['RUCHI','Ruchi Soya Industries'],['GODREJAGRO','Godrej Agrovet'],
+  ['JUBLRL','Jubilant Agri and Consumer Products'],['PARADEEP','Paradeep Phosphates'],
+  ['DHARMDIST','Dharamsi Morarji Chemical'],
+  // ── Miscellaneous / Popular ───────────────────────────
+  ['IRCTC','Indian Railway Catering and Tourism Corporation'],
+  ['DMART','Avenue Supermarts'],['ZOMATO','Zomato'],['NYKAA','FSN E-Commerce Ventures'],
+  ['POLICYBZR','PB Fintech'],['CARTRADE','CarTrade Tech'],
+  ['DELHIVERY','Delhivery'],['MAPMYINDIA','CE Info Systems'],
+  ['ASIANPAINT','Asian Paints'],['BERGERPAINTS','Berger Paints India'],
+  ['AKZONOBEL','Akzo Nobel India'],['JKSEMENT','JK Cement'],
+  ['GRAVITA','Gravita India'],['MSTCLTD','MSTC Limited'],
+  ['NIFTY50','Nifty 50 Index'],['NIFTYBEES','Nifty 50 ETF'],
+  ['GOLDBEES','Gold ETF Benchmark'],['SETFNIF50','SBI ETF Nifty 50']
 ];
 
 // Build a lookup map for fast access
@@ -1549,41 +1747,90 @@ Object.keys(SECTORS).forEach(function(sec){
   SECTORS[sec].symbols.forEach(function(sym){ _symSector[sym] = SECTORS[sec].label; });
 });
 
+// Common name aliases → ticker
+var NSE_ALIASES = {
+  'HDFC BANK':'HDFCBANK','STATE BANK':'SBIN','ICICI':'ICICIBANK',
+  'TATA MOTORS':'TATAMOTORS','TATA STEEL':'TATASTEEL',
+  'TATA POWER':'TATAPOWER','TATA CONSUMER':'TATACONSUM',
+  'TATA CONSULTANCY':'TCS','INFOSYS':'INFY','WIPRO':'WIPRO',
+  'BHARTI':'BHARTIARTL','AIRTEL':'BHARTIARTL','MARUTI SUZUKI':'MARUTI',
+  'HERO':'HEROMOTOCO','BAJAJ FINANCE':'BAJFINANCE',
+  'BAJAJ FINSERV':'BAJAJFINSV','BAJAJ AUTO':'BAJAJ-AUTO',
+  'SUN PHARMA':'SUNPHARMA','DR REDDY':'DRREDDY','DR. REDDY':'DRREDDY',
+  'ULTRATECH':'ULTRACEMCO','ASIAN PAINT':'ASIANPAINT',
+  'AXIS':'AXISBANK','KOTAK':'KOTAKBANK','INDUSIND':'INDUSINDBK',
+  'MAHINDRA':'M&M','M AND M':'M&M','LARSEN':'LT','L&T':'LT',
+  'POWER GRID':'POWERGRID','COAL INDIA':'COALINDIA',
+  'NESTLE':'NESTLEIND','BRITANNIA':'BRITANNIA','DABUR':'DABUR',
+  'ADANI':'ADANIENT','ADANI PORTS':'ADANIPORTS','ADANI GREEN':'ADANIGREEN',
+  'RELIANCE':'RELIANCE','ONGC':'ONGC','IOC':'IOC','BPCL':'BPCL','HPCL':'HINDPETRO',
+  'INDIGGO':'INDIGO','INTERGLOBE':'INDIGO','PAYTM':'PAYTM',
+  'AVENUE SUPERMART':'DMART','DMART':'DMART','ZOMATO':'ZOMATO',
+  'PVR':'PVRINOX','INOX':'PVRINOX'
+};
+
 function acSearch(query) {
   if (!query || query.length < 1) return [];
-  var q = query.toUpperCase().trim();
+  var q  = query.toUpperCase().trim();
+  var ql = query.toLowerCase().trim();
   var results = [];
   var seen    = {};
 
-  // 1. Exact ticker prefix match (highest priority)
-  NSE_STOCKS.forEach(function(row) {
-    var ticker = row[0], name = row[1];
-    if (ticker.startsWith(q) && !seen[ticker]) {
-      results.push({ ticker: ticker, name: name, matchOn: 'ticker' });
-      seen[ticker] = true;
+  // 0. Alias match
+  Object.keys(NSE_ALIASES).forEach(function(alias) {
+    if (alias.includes(ql.toUpperCase()) || ql.toUpperCase().includes(alias)) {
+      var ticker = NSE_ALIASES[alias];
+      if (!seen[ticker]) {
+        var row = NSE_STOCKS.find(function(r){ return r[0] === ticker; });
+        if (row) { results.push({ ticker: ticker, name: row[1], matchOn: 'alias' }); seen[ticker] = true; }
+      }
     }
   });
 
-  // 2. Ticker contains query
+  // 1. Exact ticker match
   NSE_STOCKS.forEach(function(row) {
-    var ticker = row[0], name = row[1];
-    if (!seen[ticker] && ticker.includes(q)) {
-      results.push({ ticker: ticker, name: name, matchOn: 'ticker' });
-      seen[ticker] = true;
+    if (row[0] === q && !seen[row[0]]) {
+      results.push({ ticker: row[0], name: row[1], matchOn: 'ticker' });
+      seen[row[0]] = true;
     }
   });
 
-  // 3. Company name contains query (case-insensitive)
-  var ql = query.toLowerCase().trim();
+  // 2. Ticker starts with query
   NSE_STOCKS.forEach(function(row) {
-    var ticker = row[0], name = row[1];
-    if (!seen[ticker] && name.toLowerCase().includes(ql)) {
-      results.push({ ticker: ticker, name: name, matchOn: 'name' });
-      seen[ticker] = true;
+    if (!seen[row[0]] && row[0].startsWith(q)) {
+      results.push({ ticker: row[0], name: row[1], matchOn: 'ticker' });
+      seen[row[0]] = true;
     }
   });
 
-  return results.slice(0, 10); // max 10 suggestions
+  // 3. Ticker contains query
+  NSE_STOCKS.forEach(function(row) {
+    if (!seen[row[0]] && row[0].includes(q)) {
+      results.push({ ticker: row[0], name: row[1], matchOn: 'ticker' });
+      seen[row[0]] = true;
+    }
+  });
+
+  // 4. Company name word starts with query (e.g. "tata" → all Tata companies)
+  NSE_STOCKS.forEach(function(row) {
+    if (!seen[row[0]]) {
+      var words = row[1].toLowerCase().split(/\s+/);
+      if (words.some(function(w){ return w.startsWith(ql); })) {
+        results.push({ ticker: row[0], name: row[1], matchOn: 'name' });
+        seen[row[0]] = true;
+      }
+    }
+  });
+
+  // 5. Company name contains query anywhere
+  NSE_STOCKS.forEach(function(row) {
+    if (!seen[row[0]] && row[1].toLowerCase().includes(ql)) {
+      results.push({ ticker: row[0], name: row[1], matchOn: 'name' });
+      seen[row[0]] = true;
+    }
+  });
+
+  return results.slice(0, 12);
 }
 
 function acHighlight(text, query) {
