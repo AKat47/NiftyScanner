@@ -2796,86 +2796,116 @@ function renderSetup(){
       +'<div class="chain-status '+stCls+'">'+stLbl+'</div></div>';
   }).join('');
 
+  var angelStatus = S.sources.angel.connected
+    ? '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:14px">'
+        +'<div style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>'
+        +'<span style="font-size:13px;color:var(--green);font-weight:600">Connected — Angel One is active data source</span>'
+      +'</div>'
+    : '<div style="font-size:12.5px;color:var(--txt3);margin-bottom:14px;line-height:1.65;">'
+        +'Enter your Angel One SmartAPI credentials below. Get them from '
+        +'<span style="color:var(--accent)">smartapi.angelone.in</span> → Create App. '
+        +'TOTP secret + password must be set as Vercel env vars.'
+      +'</div>';
+
   return '<div class="setup-wrap">'
+
+    // ── 1. Angel One (most important — shown first) ─────
+    +'<div class="setup-card setup-full" style="border-color:var(--accent);border-width:1.5px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+        +'<div style="width:36px;height:36px;border-radius:9px;background:var(--amber-dim);display:grid;place-items:center;font-size:18px;flex-shrink:0">🅐</div>'
+        +'<div>'
+          +'<h3 style="margin:0;font-size:15px">Angel One SmartAPI</h3>'
+          +'<div style="font-size:11.5px;color:var(--txt3);margin-top:2px">Real-time data source · configure this first</div>'
+        +'</div>'
+      +'</div>'
+      +angelStatus
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+        +'<div class="field-row" style="margin-bottom:0"><label class="field-label">API Key</label>'
+          +'<input class="field-input" id="angelApiKey" type="password" placeholder="From smartapi.angelone.in" value="'+escHtml(S.angelCreds.apiKey)+'"></div>'
+        +'<div class="field-row" style="margin-bottom:0"><label class="field-label">Client ID</label>'
+          +'<input class="field-input" id="angelClientId" type="text" placeholder="Your Angel One login ID" value="'+escHtml(S.angelCreds.clientId)+'"></div>'
+      +'</div>'
+      +'<div style="margin-top:12px;padding:12px 14px;background:var(--bg3);border-radius:var(--r);font-size:12px;color:var(--txt3);line-height:1.75">'
+        +'<strong style="color:var(--txt2)">Vercel env vars also required:</strong> '
+        +'<span style="font-family:DM Mono,monospace;color:var(--accent)">ANGEL_PASSWORD</span> and '
+        +'<span style="font-family:DM Mono,monospace;color:var(--accent)">ANGEL_TOTP_SECRET</span> '
+        +'(the 32-char key from Angel One app → Profile → Security → Enable TOTP)'
+      +'</div>'
+      +'<button class="full-btn primary" onclick="saveAngelCreds()" style="margin-top:14px;margin-bottom:0">Save & Connect Angel One</button>'
+    +'</div>'
+
+    // ── 2. Data source chain status ─────────────────────
     +'<div class="setup-card setup-full">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
-        +'<h3 style="margin:0">Data Sources</h3>'
-        +'<span style="font-size:12px;color:var(--txt3);font-family:DM Mono,monospace;">Kite → Angel → Yahoo</span>'
+        +'<h3 style="margin:0">Data Source Status</h3>'
+        +'<span style="font-size:11.5px;color:var(--txt3);font-family:DM Mono,monospace;">Kite → Angel → Yahoo</span>'
       +'</div>'
       +chainRows
       +'<button class="full-btn" style="margin-top:14px;margin-bottom:0" onclick="initKite()">↺ Refresh connections</button>'
     +'</div>'
+
+    // ── 3. Zerodha Kite ──────────────────────────────────
     +'<div class="setup-card">'
-      +'<h3>Angel One SmartAPI</h3>'
-      +'<div style="font-size:11px;color:var(--txt3);margin-bottom:14px;line-height:1.6;">Configure Angel One API key and Client ID. TOTP secret must be set as <span style="color:var(--accent);font-family:DM Mono,monospace">ANGEL_TOTP_SECRET</span> + password as <span style="color:var(--accent);font-family:DM Mono,monospace">ANGEL_PASSWORD</span> in Vercel env vars.</div>'
-      +'<div class="field-row"><label class="field-label">API Key</label><input class="field-input" id="angelApiKey" type="password" placeholder="API key from smartapi.angelone.in" value="'+escHtml(S.angelCreds.apiKey)+'"></div>'
-      +'<div class="field-row"><label class="field-label">Client ID</label><input class="field-input" id="angelClientId" type="text" placeholder="Your Angel One client ID" value="'+escHtml(S.angelCreds.clientId)+'"></div>'
-      +'<button class="full-btn primary" onclick="saveAngelCreds()" style="margin-bottom:0">Save & Connect</button>'
-    +'</div>'
-    +'<div class="setup-card">'
-      +'<h3>Zerodha Kite</h3>'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+        +'<div style="width:36px;height:36px;border-radius:9px;background:var(--blue-dim);display:grid;place-items:center;font-size:18px;flex-shrink:0">🅺</div>'
+        +'<div><h3 style="margin:0;font-size:15px">Zerodha Kite</h3>'
+          +'<div style="font-size:11.5px;color:var(--txt3);margin-top:2px">Real-time via Kite Connect</div>'
+        +'</div>'
+      +'</div>'
       +(S.sources.kite.connected
-        ?'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:14px"><div style="width:10px;height:10px;border-radius:50%;background:var(--green)"></div><span style="font-size:13px;color:var(--green)">Connected'+(S.sources.kite.userName?' as '+S.sources.kite.userName:'')+'</span></div>'
-        :'<div style="font-size:13px;color:var(--amber);background:var(--amber-dim);padding:10px 14px;border-radius:var(--r);margin-bottom:14px">'+(S.sources.kite.error||'Not connected')+' — using fallback</div>')
+        ?'<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:14px">'
+          +'<div style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>'
+          +'<span style="font-size:13px;color:var(--green);font-weight:600">Connected'+(S.sources.kite.userName?' as '+S.sources.kite.userName:'')+'</span></div>'
+        :'<div style="font-size:12.5px;color:var(--amber);background:var(--amber-dim);padding:10px 14px;border-radius:var(--r);margin-bottom:14px">'
+          +(S.sources.kite.error||'Not connected')+' — using fallback</div>')
       +'<button class="full-btn" onclick="fetchKiteToken()" style="margin-bottom:0">↺ Refresh Kite token</button>'
     +'</div>'
-    // ── Twilio WhatsApp Notifications card
-    +'<div class="setup-card setup-full">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-        +'<div>'
-          +'<h3 style="margin:0">WhatsApp Notifications</h3>'
-          +'<div style="font-size:12px;color:var(--txt3);margin-top:4px">via Twilio · Paper trade alerts on buy, stop loss &amp; target</div>'
+
+    // ── 4. WhatsApp Notifications ────────────────────────
+    +'<div class="setup-card">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+          +'<div style="width:36px;height:36px;border-radius:9px;background:var(--green-dim);display:grid;place-items:center;font-size:18px;flex-shrink:0">💬</div>'
+          +'<div><h3 style="margin:0;font-size:15px">WhatsApp Alerts</h3>'
+            +'<div style="font-size:11.5px;color:var(--txt3);margin-top:2px">via Twilio · paper trade events</div>'
+          +'</div>'
         +'</div>'
-        // Toggle switch
-        +'<div onclick="toggleTwilio()" style="cursor:pointer;display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:12px;color:var(--txt3)">'+(S.twilio.enabled?'ON':'OFF')+'</span>'
+        +'<div onclick="toggleTwilio()" style="cursor:pointer;flex-shrink:0">'
           +'<div style="width:40px;height:24px;border-radius:999px;background:'+(S.twilio.enabled?'var(--green)':'var(--bg4)')+';position:relative;transition:background .2s">'
             +'<div style="position:absolute;top:3px;left:'+(S.twilio.enabled?'19':'3')+'px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s"></div>'
           +'</div>'
         +'</div>'
       +'</div>'
-      // Status banner
       +(S.twilio.enabled && S.twilio.accountSid
-        ? '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--green-dim);border-radius:var(--r);margin-bottom:16px">'
-            +'<div style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>'
-            +'<span style="font-size:13px;color:var(--green);font-weight:600">Active — alerts will be sent to your WhatsApp</span>'
-          +'</div>'
-        : S.twilio.enabled
-          ? '<div style="padding:10px 14px;background:var(--amber-dim);border-radius:var(--r);font-size:13px;color:var(--amber);margin-bottom:16px">⚠ Credentials not saved yet — fill in the fields below</div>'
-          : '')
-      // Fields
+        ?'<div style="padding:8px 12px;background:var(--green-dim);border-radius:var(--r);font-size:12.5px;color:var(--green);font-weight:600;margin-bottom:12px">✓ Active</div>'
+        :'')
       +'<div class="field-row"><label class="field-label">Account SID</label>'
-        +'<input class="field-input" id="twilioSid" type="password" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value="'+escHtml(S.twilio.accountSid)+'"></div>'
+        +'<input class="field-input" id="twilioSid" type="password" placeholder="ACxxxxxxxx" value="'+escHtml(S.twilio.accountSid)+'"></div>'
       +'<div class="field-row"><label class="field-label">Auth Token</label>'
-        +'<input class="field-input" id="twilioToken" type="password" placeholder="your_auth_token" value="'+escHtml(S.twilio.authToken)+'"></div>'
-      +'<div class="field-row"><label class="field-label">From (Twilio WhatsApp number)</label>'
+        +'<input class="field-input" id="twilioToken" type="password" placeholder="auth_token" value="'+escHtml(S.twilio.authToken)+'"></div>'
+      +'<div class="field-row"><label class="field-label">From (Twilio WhatsApp)</label>'
         +'<input class="field-input" id="twilioFrom" type="text" placeholder="whatsapp:+14155238886" value="'+escHtml(S.twilio.from)+'"></div>'
-      +'<div class="field-row" style="margin-bottom:0"><label class="field-label">To (your WhatsApp number)</label>'
+      +'<div class="field-row" style="margin-bottom:12px"><label class="field-label">To (your WhatsApp)</label>'
         +'<input class="field-input" id="twilioTo" type="text" placeholder="whatsapp:+919876543210" value="'+escHtml(S.twilio.to)+'"></div>'
-      // Action buttons
-      +'<div style="display:flex;gap:10px;margin-top:16px">'
-        +'<button class="full-btn primary" onclick="saveTwilio()" style="margin:0;flex:1">Save Credentials</button>'
-        +'<button class="full-btn" onclick="testNotification()" style="margin:0;flex:0 0 auto;padding:13px 20px" '
-          +(S.twilio.enabled && S.twilio.accountSid ? '' : 'disabled style="opacity:.45;cursor:not-allowed;margin:0;flex:0 0 auto;padding:13px 20px"')
-          +'>Send Test</button>'
-      +'</div>'
-      // Setup guide
-      +'<div style="margin-top:16px;padding:14px 16px;background:var(--bg3);border-radius:var(--r);font-size:12.5px;color:var(--txt3);line-height:1.8">'
-        +'<strong style="color:var(--txt2)">Setup guide:</strong><br>'
-        +'1. Sign up at <span style="color:var(--accent)">twilio.com</span> → get Account SID &amp; Auth Token from Console<br>'
-        +'2. Enable the <span style="color:var(--accent)">WhatsApp Sandbox</span> (Messaging → Try it out → WhatsApp)<br>'
-        +'3. Send the join code from your phone to activate the sandbox<br>'
-        +'4. Set <span style="color:var(--accent);font-family:DM Mono,monospace">TWILIO_ACCOUNT_SID · TWILIO_AUTH_TOKEN · TWILIO_FROM · TWILIO_TO</span> as Vercel environment variables<br>'
-        +'5. Paste the same credentials here and hit Save'
+      +'<div style="display:flex;gap:8px">'
+        +'<button class="full-btn primary" onclick="saveTwilio()" style="margin:0;flex:1">Save</button>'
+        +'<button class="full-btn" onclick="testNotification()" '
+          +(S.twilio.enabled && S.twilio.accountSid ? '' : 'disabled ')
+          +'style="margin:0;flex:0 0 auto;padding:12px 18px;'
+          +(S.twilio.enabled && S.twilio.accountSid ? '' : 'opacity:.4;cursor:not-allowed;')
+          +'">Test</button>'
       +'</div>'
     +'</div>'
-    // ── MongoDB Cache (info card)
-    +'<div class="setup-card" style="background:var(--bg3);border-style:dashed">'
-      +'<h3 style="color:var(--txt3)">MongoDB Cache</h3>'
-      +'<div style="font-size:12px;color:var(--txt3);line-height:1.8">'
-        +'Candle data is cached in MongoDB once per hour (IST) and shared across all users. Set <span style="color:var(--accent);font-family:DM Mono,monospace">MONGODB_URI</span> in Vercel environment variables.'
+
+    // ── 5. MongoDB Cache (info) ──────────────────────────
+    +'<div class="setup-card setup-full" style="background:var(--bg3);border-style:dashed">'
+      +'<h3 style="color:var(--txt3);margin-bottom:8px">MongoDB Cache</h3>'
+      +'<div style="font-size:12.5px;color:var(--txt3);line-height:1.75">'
+        +'Candle data is cached hourly in MongoDB and shared across all users. '
+        +'Set <span style="color:var(--accent);font-family:DM Mono,monospace">MONGODB_URI</span> in Vercel environment variables.'
       +'</div>'
     +'</div>'
+
   +'</div>';
 }
 
